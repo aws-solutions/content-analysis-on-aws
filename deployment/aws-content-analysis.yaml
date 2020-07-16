@@ -1,0 +1,2937 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Media Insights Engine - Base AWS CloudFormation template that provisions the core Media Insights Engine services and provides parameters for enabling additional functionality.
+
+Parameters:
+  AdminEmail:
+    Description: Email address for the MIE Administrator
+    Type: String
+  DeployDemoSite:
+    Type: String
+    Description: Deploy a front end application to explore extracted metadata
+    Default: Yes
+    AllowedValues:
+      - Yes
+      - No
+
+Conditions:
+  Metrics: !Equals [ !FindInMap [AnonymousData,SendAnonymousData,Data], Yes]
+  DeployDemoSiteCondition:
+    !Equals [!Ref DeployDemoSite, Yes]
+
+
+Mappings:
+  SourceCode:
+    General:
+      GlobalS3Bucket: "%%GLOBAL_BUCKET_NAME%%"
+      RegionalS3Bucket: "%%REGIONAL_BUCKET_NAME%%"
+      CodeKeyPrefix: "aws-content-analysis/%%VERSION%%"
+      TemplateKeyPrefix: "aws-content-analysis/%%VERSION%%"
+  AnonymousData:
+    SendAnonymousData:
+      Data: Yes
+
+Resources:
+  # Custom log group
+  MieLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: MediaInsightsLogs
+      RetentionInDays: 14
+
+  # IAM Roles
+  StageExecutionRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "The policy is scoped down to MIE specific resources with a condition tag"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${AWS::StackName}-stage-execution-lambda-role"
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                Resource:
+                  - !Join [
+                    "",
+                    [
+                      "arn:aws:states:",
+                      Ref: "AWS::Region",
+                      ":",
+                      Ref: "AWS::AccountId",
+                      ":stateMachine:",
+                      "*",
+                    ],
+                  ]
+                Condition:
+                  StringEquals:
+                    aws:ResourceTag/environment: mie
+              - Effect: Allow
+                Action:
+                  - "dynamodb:GetItem"
+                  - "dynamodb:Query"
+                  - "dynamodb:Scan"
+                  - "dynamodb:DescribeTable"
+                  - "dynamodb:BatchGetItem"
+                  - "dynamodb:GetRecords"
+                  - "dynamodb:DescribeLimits"
+                  - "dynamodb:PutItem"
+                  - "dynamodb:UpdateItem"
+                  - "dynamodb:DeleteItem"
+                  - "dynamodb:BatchWriteItem"
+                Resource:
+                  - !Join [
+                      "",
+                      [
+                        "arn:aws:dynamodb:",
+                        Ref: "AWS::Region",
+                        ":",
+                        Ref: "AWS::AccountId",
+                        ":table/",
+                        Ref: "WorkflowTable",
+                      ],
+                    ]
+                  - !Join [
+                    "",
+                    [
+                      "arn:aws:dynamodb:",
+                      Ref: "AWS::Region",
+                      ":",
+                      Ref: "AWS::AccountId",
+                      ":table/",
+                      Ref: "WorkflowExecutionTable",
+                    ],
+                  ]
+                  - !Join [
+                      "",
+                      [
+                        "arn:aws:dynamodb:",
+                        Ref: "AWS::Region",
+                        ":",
+                        Ref: "AWS::AccountId",
+                        ":table/",
+                        Ref: "WorkflowExecutionTable",
+                        "/index/",
+                        "*",
+                      ],
+                    ]
+                  - !Join [
+                    "",
+                    [
+                      "arn:aws:dynamodb:",
+                      Ref: "AWS::Region",
+                      ":",
+                      Ref: "AWS::AccountId",
+                      ":table/",
+                      Ref: "SystemTable",
+                    ],
+                  ]
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Join [
+                    "",
+                    [
+                      "arn:aws:logs:",
+                      Ref: "AWS::Region",
+                      ":",
+                      Ref: "AWS::AccountId",
+                      ":log-group:/aws/lambda/*",
+                    ],
+                  ]
+              - Effect: Allow
+                Action:
+                  - sqs:DeleteMessage
+                  - sqs:ListQueues
+                  - sqs:ChangeMessageVisibility
+                  - sqs:ReceiveMessage
+                  - sqs:SendMessage
+                Resource:
+                  - "Fn::GetAtt":
+                      - StageExecutionQueue
+                      - Arn
+                  - "Fn::GetAtt":
+                      - WorkflowExecutionLambdaDeadLetterQueue
+                      - Arn
+
+  OperationLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "The policy is scoped down to MIE specific resources with a condition tag"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${AWS::StackName}-operation-lambda-role"
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                Resource:
+                  - !Join [
+                    "",
+                    [
+                      "arn:aws:states:",
+                      Ref: "AWS::Region",
+                      ":",
+                      Ref: "AWS::AccountId",
+                      ":stateMachine:",
+                      "*",
+                    ],
+                  ]
+                Condition:
+                  StringEquals:
+                    aws:ResourceTag/environment: mie
+              - Effect: Allow
+                Action:
+                  - "dynamodb:GetItem"
+                  - "dynamodb:Query"
+                  - "dynamodb:Scan"
+                  - "dynamodb:DescribeTable"
+                  - "dynamodb:BatchGetItem"
+                  - "dynamodb:GetRecords"
+                  - "dynamodb:DescribeLimits"
+                  - "dynamodb:PutItem"
+                  - "dynamodb:UpdateItem"
+                  - "dynamodb:DeleteItem"
+                  - "dynamodb:BatchWriteItem"
+                Resource:
+                  - !Join [
+                      "",
+                      [
+                        "arn:aws:dynamodb:",
+                        Ref: "AWS::Region",
+                        ":",
+                        Ref: "AWS::AccountId",
+                        ":table/",
+                        Ref: "WorkflowTable",
+                      ],
+                    ]
+                  - !Join [
+                    "",
+                    [
+                      "arn:aws:dynamodb:",
+                      Ref: "AWS::Region",
+                      ":",
+                      Ref: "AWS::AccountId",
+                      ":table/",
+                      Ref: "WorkflowExecutionTable",
+                    ],
+                  ]
+                  - !Join [
+                      "",
+                      [
+                        "arn:aws:dynamodb:",
+                        Ref: "AWS::Region",
+                        ":",
+                        Ref: "AWS::AccountId",
+                        ":table/",
+                        Ref: "WorkflowExecutionTable",
+                        "/index/",
+                        "*",
+                      ],
+                    ]
+                  - !Join [
+                    "",
+                    [
+                      "arn:aws:dynamodb:",
+                      Ref: "AWS::Region",
+                      ":",
+                      Ref: "AWS::AccountId",
+                      ":table/",
+                      Ref: "SystemTable",
+                    ],
+                  ]
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Join [
+                    "",
+                    [
+                      "arn:aws:logs:",
+                      Ref: "AWS::Region",
+                      ":",
+                      Ref: "AWS::AccountId",
+                      ":log-group:/aws/lambda/*",
+                    ],
+                  ]
+              - Effect: Allow
+                Action:
+                  - sqs:DeleteMessage
+                  - sqs:ListQueues
+                  - sqs:ChangeMessageVisibility
+                  - sqs:ReceiveMessage
+                  - sqs:SendMessage
+                Resource:
+                  - "Fn::GetAtt":
+                      - StageExecutionQueue
+                      - Arn
+                  - "Fn::GetAtt":
+                      - WorkflowExecutionLambdaDeadLetterQueue
+                      - Arn
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - "Fn::GetAtt":
+                      - WorkflowSchedulerLambda
+                      - Arn
+
+  operatorFailedRole:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "Lambda requires ability to write to cloudwatch *, as configured in the default AWS lambda execution role."
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+      Policies:
+        - PolicyName: "OperatorFailedAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "arn:aws:logs:*:*:*:*"
+                Effect: Allow
+
+  # Services - Dynamodb
+
+  SystemTable:
+    Type: AWS::DynamoDB::Table
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "Table name is constructed with stack name. On update, we need to keep the existing table name."
+    Properties:
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: Name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Name
+          KeyType: HASH
+      TableName: !Join ["", [Ref: "AWS::StackName", "System"]]
+
+  WorkflowTable:
+    Type: AWS::DynamoDB::Table
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "Table name is constructed with stack name. On update, we need to keep the existing table name."
+    Properties:
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: Name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Name
+          KeyType: HASH
+      TableName: !Join ["", [Ref: "AWS::StackName", "Workflow"]]
+
+  StageTable:
+    Type: AWS::DynamoDB::Table
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "Table name is constructed with stack name. On update, we need to keep the existing table name."
+    Properties:
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: Name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Name
+          KeyType: HASH
+      TableName: !Join ["", [Ref: "AWS::StackName", "Stage"]]
+
+  OperationTable:
+    Type: AWS::DynamoDB::Table
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "Table name is constructed with stack name. On update, we need to keep the existing table name."
+    Properties:
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: Name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Name
+          KeyType: HASH
+      TableName: !Join ["", [Ref: "AWS::StackName", "Operation"]]
+
+  HistoryTable:
+    Type: AWS::DynamoDB::Table
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "Table name is constructed with stack name. On update, we need to keep the existing table name."
+    Properties:
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: Id
+          AttributeType: S
+        - AttributeName: Version
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Id
+          KeyType: HASH
+        - AttributeName: Version
+          KeyType: RANGE
+      TableName: !Join ["", [Ref: "AWS::StackName", "History"]]
+
+  WorkflowExecutionTable:
+    Type: AWS::DynamoDB::Table
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "Table name is constructed with stack name. On update, we need to keep the existing table name."
+    Properties:
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: Id
+          AttributeType: S
+        - AttributeName: Status
+          AttributeType: S
+        - AttributeName: AssetId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: WorkflowExecutionStatus
+          KeySchema:
+            - AttributeName: Status
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: WorkflowExecutionAssetId
+          KeySchema:
+            - AttributeName: AssetId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      TableName: !Join ["", [Ref: "AWS::StackName", "WorkflowExecution"]]
+
+  DataplaneTable:
+    Type: AWS::DynamoDB::Table
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "Table name is constructed with stack name. On update, we need to keep the existing table name."
+    Properties:
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: AssetId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: AssetId
+          KeyType: HASH
+      TableName: !Join ["", [Ref: "AWS::StackName", "DataplaneTable"]]
+      StreamSpecification:
+        StreamViewType: "NEW_AND_OLD_IMAGES"
+
+  # Services - S3
+  DataplaneLogsBucket:
+    DeletionPolicy: Retain
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: LogDeliveryWrite
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W35
+            reason: "Used to store access logs for other buckets"
+          - id: W51
+            reason: "Bucket is private and does not need a bucket policy"
+
+  Dataplane:
+    Type: "AWS::S3::Bucket"
+    DependsOn: DataplaneLogsBucket
+    DeletionPolicy: Retain
+    Properties:
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: ["GET", "POST"]
+            AllowedOrigins: ["*"]
+            Id: AllowUploadsFromWebApp
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LoggingConfiguration:
+        DestinationBucketName: !Ref DataplaneLogsBucket
+        LogFilePrefix: "access_logs/"
+      LifecycleConfiguration:
+        Rules:
+          - Id: "Keep access log for 10 days"
+            Status: Enabled
+            Prefix: "access_logs/"
+            ExpirationInDays: 10
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+          - Id: "Keep cloudfront log for 10 days"
+            Status: Enabled
+            Prefix: "cf_logs/"
+            ExpirationInDays: 10
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+
+  DataplaneBucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket: !Ref Dataplane
+      PolicyDocument:
+        Statement:
+          - Effect: Deny
+            Principal: "*"
+            Action: "*"
+            Resource: !Sub "arn:aws:s3:::${Dataplane}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  # Service - cognito / security infrastructure
+
+  # This lambda is needed in order to format cognito role mapping. Reference:
+  # https://forums.aws.amazon.com/message.jspa?messageID=790437#790437
+
+  CognitoRoleMappingTransformer:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          import json
+          import cfnresponse
+
+
+          def handler(event, context):
+              print("Event: %s" % json.dumps(event))
+              resourceProperties = event["ResourceProperties"]
+              responseData = {
+                  "RoleMapping": {
+                      resourceProperties["IdentityProvider"]: {
+                          "Type": resourceProperties["Type"]
+                      }
+                  }
+              }
+              if resourceProperties["AmbiguousRoleResolution"]:
+                  responseData["RoleMapping"][resourceProperties["IdentityProvider"]]["AmbiguousRoleResolution"] = \
+                  resourceProperties["AmbiguousRoleResolution"]
+
+              print(responseData)
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+      Handler: !Join
+        - ''
+        - - index
+          - .handler
+      Role: !GetAtt CognitoRoleMapperLambdaExecutionRole.Arn
+      Runtime: python3.7
+      Timeout: 30
+
+  CognitoRoleMapperLambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "Lambda requires ability to write to cloudwatch *, as configured in the default AWS lambda execution role."
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: 'arn:aws:logs:*:*:*'
+  MieUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      AdminCreateUserConfig:
+          AllowAdminCreateUserOnly: True
+          InviteMessageTemplate:
+            EmailMessage: !Join ["", [
+              "Your username is {username} and temporary password is {####}<br>Stack Name: ",
+              Ref: "AWS::StackName",
+              "<br>Stack Overview:<br>",
+              "https://",
+              Ref: "AWS::Region",
+              ".console.aws.amazon.com/cloudformation/home?region=",
+              Ref: "AWS::Region",
+              "#/stacks/stackinfo?stackId=",
+              Ref: "AWS::StackId"
+            ]]
+            EmailSubject: "Welcome to the AWS Media Insights Engine"
+      EmailConfiguration:
+        EmailSendingAccount: 'COGNITO_DEFAULT'
+      AutoVerifiedAttributes: ['email']
+
+  MieCognitoDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref Dataplane
+      UserPoolId: !Ref MieUserPool
+
+  MieAdminClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref MieUserPool
+      ExplicitAuthFlows: ['ADMIN_NO_SRP_AUTH']
+
+  MieWebAppClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref MieUserPool
+
+  MieIdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      AllowUnauthenticatedIdentities: False
+      CognitoIdentityProviders:
+        - ClientId: !Ref MieWebAppClient
+          ProviderName: !GetAtt MieUserPool.ProviderName
+
+  # More hacky cfn for getting the role mapping
+  TransformedRoleMapping:
+    Type: Custom::TransformedRoleMapping
+    Properties:
+      ServiceToken: !GetAtt CognitoRoleMappingTransformer.Arn
+      Type: Token
+      AmbiguousRoleResolution: Deny
+      IdentityProvider:
+        'Fn::Join':
+          - ':'
+          - - 'Fn::GetAtt':
+                - MieUserPool
+                - ProviderName
+            - Ref: MieWebAppClient
+
+  CognitStandardAuthDefaultRole:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: F38
+            reason: "* resource is used to deny access in this policy"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Federated: "cognito-identity.amazonaws.com"
+            Action:
+              - "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals:
+                "cognito-identity.amazonaws.com:aud": !Ref MieIdentityPool
+              "ForAnyValue:StringEquals":
+                "cognito-identity.amazonaws.com:amr": authenticated
+      Policies:
+        - PolicyName: "MieCognitoAuthNoGroup"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action: "*"
+                Resource: "*"
+                Effect: "Deny"
+
+  CognitStandardUnauthDefaultRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Federated: "cognito-identity.amazonaws.com"
+            Action:
+              - "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals:
+                "cognito-identity.amazonaws.com:aud": !Ref MieIdentityPool
+              "ForAnyValue:StringEquals":
+                "cognito-identity.amazonaws.com:amr": unauthenticated
+
+  MieIdentityPoolRoleMapping:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref MieIdentityPool
+      RoleMappings: !GetAtt TransformedRoleMapping.RoleMapping
+      Roles:
+        authenticated: !GetAtt CognitStandardAuthDefaultRole.Arn
+        unauthenticated: !GetAtt CognitStandardUnauthDefaultRole.Arn
+
+  MieDeveloperGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      Description: 'User group for developers'
+      RoleArn: !GetAtt MieDeveloperRole.Arn
+      UserPoolId: !Ref MieUserPool
+      GroupName: MieDevelopersGroup
+
+  MieDefaultDeveloperAccount:
+    Type: AWS::Cognito::UserPoolUser
+    Properties:
+      DesiredDeliveryMediums:
+        - EMAIL
+      UserAttributes: [{"Name": "email", "Value": !Ref AdminEmail}]
+      Username: !Ref AdminEmail
+      UserPoolId: !Ref MieUserPool
+
+  MieDeveloperRole:
+    DependsOn: [MediaInsightsWorkflowApi, MediaInsightsDataplaneApiStack]
+    Type: "AWS::IAM::Role"
+    Properties:
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: "Allow"
+              Principal:
+                Federated: "cognito-identity.amazonaws.com"
+              Action:
+                - "sts:AssumeRoleWithWebIdentity"
+              Condition:
+                StringEquals:
+                  "cognito-identity.amazonaws.com:aud": !Ref MieIdentityPool
+                "ForAnyValue:StringEquals":
+                  "cognito-identity.amazonaws.com:amr": authenticated
+        Policies:
+          - PolicyName: "MieDeveloporCognitoPolicy"
+            PolicyDocument: !Sub
+              - |-
+                {
+                  "Version": "2012-10-17",
+                  "Statement": [
+                    {
+                      "Action": [
+                        "execute-api:Invoke"
+                      ],
+                      "Effect": "Allow",
+                      "Resource": ["arn:aws:execute-api:${region}:${account}:${wfapi}/*/", "arn:aws:execute-api:${region}:${account}:${dataapi}/*/"]
+                    }
+                  ]
+                }
+              - {
+                region: !Ref "AWS::Region",
+                account: !Ref "AWS::AccountId",
+                wfapi: !GetAtt MediaInsightsWorkflowApi.Outputs.RestAPIId,
+                dataapi: !GetAtt MediaInsightsDataplaneApiStack.Outputs.RestAPIId
+              }
+
+  MieAddDevUserToGroup:
+    DependsOn: MieDefaultDeveloperAccount
+    Type: AWS::Cognito::UserPoolUserToGroupAttachment
+    Properties:
+      GroupName: !Ref MieDeveloperGroup
+      Username: !Ref AdminEmail
+      UserPoolId: !Ref MieUserPool
+
+  # Services - SQS
+
+  WorkflowExecutionLambdaDeadLetterQueue:
+    Type: "AWS::SQS::Queue"
+    Properties:
+      QueueName: "WorkflowExecutionLambdaDLQ"
+      MessageRetentionPeriod: 43200 # #Maximum, 12 hours in seconds.
+      KmsMasterKeyId: "alias/aws/sqs"
+
+  StageExecutionDeadLetterQueue:
+    Type: "AWS::SQS::Queue"
+    Properties:
+      QueueName: "StageExecutionDLQ"
+      MessageRetentionPeriod: 43200 # #Maximum, 12 hours in seconds.
+      KmsMasterKeyId: "alias/aws/sqs"
+
+  StageExecutionQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: StageExecution
+      VisibilityTimeout: 43200 #Maximum, 12 hours in seconds.  Stages are long running
+      ReceiveMessageWaitTimeSeconds: 20 #Maximum, long poll on this queue, it has one reader that is single threaded
+      RedrivePolicy:
+        deadLetterTargetArn:
+          "Fn::GetAtt":
+            - StageExecutionDeadLetterQueue
+            - Arn
+        maxReceiveCount: 1 # Don't retry if stage times out
+      KmsMasterKeyId: "alias/aws/sqs"
+
+  # Lambda Layers:
+
+  MediaInsightsEnginePython37Layer:
+    Type: "AWS::Lambda::LayerVersion"
+    DeletionPolicy: Retain
+    Properties:
+      CompatibleRuntimes:
+        - python3.7
+      Content:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "media_insights_engine_lambda_layer_python3.7.zip",
+            ],
+          ]
+      Description: Boto3 and MediaInsightsEngineLambdaHelper packages for Python 3.7
+      LayerName: media-insights-engine-python37
+      LicenseInfo: Apache-2.0
+
+  MediaInsightsEnginePython36Layer:
+    Type: "AWS::Lambda::LayerVersion"
+    DeletionPolicy: Retain
+    Properties:
+      CompatibleRuntimes:
+        - python3.7
+      Content:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "media_insights_engine_lambda_layer_python3.6.zip",
+            ],
+          ]
+      Description: Boto3 and MediaInsightsEngineLambdaHelper packages for Python 3.6
+      LayerName: media-insights-engine-python36
+      LicenseInfo: Apache-2.0
+
+  Boto3Python37LayerPermission:
+    Type: "AWS::Lambda::LayerVersionPermission"
+    DeletionPolicy: Retain
+    Properties:
+      Action: lambda:GetLayerVersion
+      LayerVersionArn: !Ref MediaInsightsEnginePython37Layer
+      Principal: !Ref AWS::AccountId
+
+  # Services - Lambda
+
+  LambdaSchedule:
+    Type: "AWS::Events::Rule"
+    DependsOn: WorkflowSchedulerLambda
+    Properties:
+      Description: >
+        A schedule for the Lambda function..
+      ScheduleExpression: rate(1 minute)
+      State: ENABLED
+      Targets:
+        - Arn: !Sub ${WorkflowSchedulerLambda.Arn}
+          Id: LambdaSchedule
+
+  LambdaSchedulePermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Sub ${WorkflowSchedulerLambda.Arn}
+      Principal: "events.amazonaws.com"
+      SourceArn: !Sub ${LambdaSchedule.Arn}
+
+  WorkflowSchedulerLambda:
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-workflow-scheduler"
+      Environment:
+        Variables:
+          STAGE_EXECUTION_QUEUE_URL: !Ref StageExecutionQueue
+          STAGE_TABLE_NAME: !Ref StageTable
+          OPERATION_TABLE_NAME: !Ref OperationTable
+          WORKFLOW_EXECUTION_TABLE_NAME: !Ref WorkflowExecutionTable
+          WORKFLOW_TABLE_NAME: !Ref WorkflowTable
+          SYSTEM_TABLE_NAME: !Ref SystemTable
+          DEFAULT_MAX_CONCURRENT_WORKFLOWS: 3
+      Handler: app.workflow_scheduler_lambda
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "workflow.zip",
+            ],
+          ]
+      MemorySize: 256
+      Role:
+        Fn::GetAtt:
+          - StageExecutionRole
+          - Arn
+      Runtime: python3.6
+      Timeout: 900
+      ReservedConcurrentExecutions: 1
+      DeadLetterConfig:
+        TargetArn:
+          Fn::GetAtt:
+            - WorkflowExecutionLambdaDeadLetterQueue
+            - Arn
+    Type: AWS::Lambda::Function
+
+  CompleteStageLambda:
+    DependsOn:
+      - WorkflowSchedulerLambda
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-complete-workflow"
+      Environment:
+        Variables:
+          STAGE_EXECUTION_QUEUE_URL: !Ref StageExecutionQueue
+          STAGE_TABLE_NAME: !Ref StageTable
+          OPERATION_TABLE_NAME: !Ref OperationTable
+          WORKFLOW_EXECUTION_TABLE_NAME: !Ref WorkflowExecutionTable
+          WORKFLOW_TABLE_NAME: !Ref WorkflowTable
+          SYSTEM_TABLE_NAME: !Ref SystemTable
+          WORKFLOW_SCHEDULER_LAMBDA_ARN:
+            Fn::GetAtt:
+              - WorkflowSchedulerLambda
+              - Arn
+      Handler: app.complete_stage_execution_lambda
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "workflow.zip",
+            ],
+          ]
+      MemorySize: 256
+      Role:
+        Fn::GetAtt:
+          - OperationLambdaExecutionRole
+          - Arn
+      Runtime: python3.6
+      Timeout: 900
+    Type: AWS::Lambda::Function
+
+  FilterOperationLambda:
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-filter-operation"
+      Environment:
+        Variables:
+          STAGE_EXECUTION_QUEUE_URL: !Ref StageExecutionQueue
+          STAGE_TABLE_NAME: !Ref StageTable
+          OPERATION_TABLE_NAME: !Ref OperationTable
+          WORKFLOW_EXECUTION_TABLE_NAME: !Ref WorkflowExecutionTable
+          WORKFLOW_TABLE_NAME: !Ref WorkflowTable
+      Handler: app.filter_operation_lambda
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "workflow.zip",
+            ],
+          ]
+      MemorySize: 256
+      Role:
+        Fn::GetAtt:
+          - OperationLambdaExecutionRole
+          - Arn
+      Runtime: python3.6
+      Timeout: 900
+    Type: AWS::Lambda::Function
+
+  OperatorFailedLambda:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "operator_failed.lambda_handler"
+      Layers:
+        - !Ref "MediaInsightsEnginePython37Layer"
+      Role: !GetAtt "operatorFailedRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+              !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+              "operator_failed.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+
+  # DataPlane API Stack
+  MediaInsightsDataplaneApiStack:
+    DependsOn: MieUserPool
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: !Join
+        - ''
+        - - 'https://'
+          - !FindInMap ["SourceCode", "General", "GlobalS3Bucket"]
+          - .s3
+          - '.amazonaws.com/'
+          - !FindInMap
+            - SourceCode
+            - General
+            - TemplateKeyPrefix
+          - "/media-insights-dataplane-api-stack.template"
+      Parameters:
+        DataplaneTableName: !Ref DataplaneTable
+        DataplaneBucketName: !Ref Dataplane
+        UserPoolArn: !GetAtt MieUserPool.Arn
+        DeploymentPackageBucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        DeploymentPackageKey:
+          !Join [
+            "/",
+            [
+              !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+              "dataplaneapi.zip",
+            ],
+          ]
+
+  Analytics:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn:
+      - MediaInsightsWorkflowApi
+      - MediaInsightsDataplaneApiStack
+    Properties:
+      TemplateURL: !Join
+        - ''
+        - - 'https://'
+          - !FindInMap ["SourceCode", "General", "GlobalS3Bucket"]
+          - .s3
+          - '.amazonaws.com/'
+          - !FindInMap
+            - SourceCode
+            - General
+            - TemplateKeyPrefix
+          - "/media-insights-dataplane-streaming-stack.template"
+      Parameters:
+        DynamoStreamArn:
+          Fn::GetAtt:
+            - DataplaneTable
+            - StreamArn
+        DynamoTableArn: !GetAtt DataplaneTable.Arn
+        DeployElasticConsumer: Yes
+        DataplaneBucket: !Ref Dataplane
+        MieAdminRole: !GetAtt MieDeveloperRole.Arn
+
+  # Workflow creation and execution API
+  MediaInsightsWorkflowApi:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: !Join
+        - ''
+        - - 'https://'
+          - !FindInMap ["SourceCode", "General", "GlobalS3Bucket"]
+          - .s3
+          - '.amazonaws.com/'
+          - !FindInMap
+            - SourceCode
+            - General
+            - TemplateKeyPrefix
+          - "/media-insights-workflowapi-stack.template"
+      Parameters:
+        UserPoolArn: !GetAtt MieUserPool.Arn
+        StageExecutionQueueUrl: !Ref StageExecutionQueue
+        StageExecutionRole: !GetAtt StageExecutionRole.Arn
+        OperationTableName: !Ref OperationTable
+        StageTableName: !Ref StageTable
+        WorkflowExecutionTableName: !Ref WorkflowExecutionTable
+        WorkflowTableName: !Ref WorkflowTable
+        HistoryTableName: !Ref HistoryTable
+        SystemTableName: !Ref SystemTable
+        SqsQueueArn: !GetAtt StageExecutionQueue.Arn
+        CompleteStageLambdaArn:
+          Fn::GetAtt:
+            - CompleteStageLambda
+            - Arn
+        FilterOperationLambdaArn:
+          Fn::GetAtt:
+            - FilterOperationLambda
+            - Arn
+        WorkflowSchedulerLambdaArn:
+          Fn::GetAtt:
+            - WorkflowSchedulerLambda
+            - Arn
+        DataplaneEndpoint:
+          Fn::GetAtt:
+            - MediaInsightsDataplaneApiStack
+            - Outputs.APIHandlerName
+        DataplaneHandlerArn:
+          Fn::GetAtt:
+            - MediaInsightsDataplaneApiStack
+            - Outputs.APIHandlerArn
+        DataPlaneBucket: !Ref Dataplane
+        OperatorFailedHandlerLambdaArn: !GetAtt OperatorFailedLambda.Arn
+        DeploymentPackageBucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        DeploymentPackageKey:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "workflowapi.zip",
+            ],
+          ]
+
+  # Operator Library
+
+  # SNS topic for storing the output of async Rekognition jobs:
+  snsRekognitionTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      DisplayName: "SNS Role for Rekognition"
+      KmsMasterKeyId: "alias/aws/sns"
+
+  # IAM Roles:
+
+  genericDataLookupLambdaRole:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "Each MIE Lambda function needs permission to read/write to the dataplane bucket"
+    Properties:
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+            - "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+      Policies:
+        - PolicyName: "GenericDataLookupLambdaAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                - "s3:GetObject"
+                - "s3:PutObject"
+                Resource: !Sub "arn:aws:s3:::${Dataplane}/*"
+                Effect: "Allow"
+              - Action: "lambda:InvokeFunction"
+                Resource: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerArn
+                Effect: "Allow"
+
+  mediainfoLambdaRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+      Policies:
+        - PolicyName: "mediainfoLambdaAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - "s3:GetObject"
+                  - "s3:PutObject"
+                  - "s3:DeleteObject"
+                Resource: !Sub "arn:aws:s3:::${Dataplane}/*"
+                Effect: "Allow"
+              - Action: "lambda:InvokeFunction"
+                Resource: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerArn
+                Effect: "Allow"
+
+  mediaConvertS3Role:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "Each MIE Lambda function needs permission to read/write to the dataplane bucket"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "mediaconvert.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: "MediaconvertAllowS3"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                - "s3:GetObject"
+                - "s3:PutObject"
+                Resource: !Sub "arn:aws:s3:::${Dataplane}/*"
+                Effect: "Allow"
+
+  mediaConvertLambdaRole:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "Each MIE Lambda function needs permission to read/write to the dataplane bucket"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+      Policies:
+        - PolicyName: "MediaConvertLambdaAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                - "mediaconvert:GetJob"
+                - "mediaconvert:ListJobs"
+                - "mediaconvert:DescribeEndpoints"
+                - "mediaconvert:CreateJob"
+                # This wildcard is present because the MediaConvert job
+                # IDs are randomly generated.
+                Resource: !Sub "arn:aws:mediaconvert:${AWS::Region}:${AWS::AccountId}:*"
+                Effect: "Allow"
+              - Action:
+                - "logs:CreateLogGroup"
+                - "logs:CreateLogStream"
+                - "logs:PutLogEvents"
+                Resource: "arn:aws:logs:*:*:*:*"
+                Effect: "Allow"
+              - Action:
+                - "iam:PassRole"
+                Resource: !GetAtt "mediaConvertS3Role.Arn"
+                Effect: "Allow"
+              - Action:
+                - "s3:GetObject"
+                - "s3:PutObject"
+                Resource: !Sub "arn:aws:s3:::${Dataplane}/*"
+                Effect: "Allow"
+              - Action: "lambda:InvokeFunction"
+                Resource: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerArn
+                Effect: "Allow"
+
+  transcribeRole:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "the policy actions used in this role require * resource"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+      Policies:
+        - PolicyName: "TranscribeAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                - "transcribe:GetVocabulary"
+                - "transcribe:GetTranscriptionJob"
+                - "transcribe:CreateVocabulary"
+                - "transcribe:StartStreamTranscription"
+                - "transcribe:StartTranscriptionJob"
+                - "transcribe:UpdateVocabulary"
+                - "transcribe:ListTranscriptionJobs"
+                - "transcribe:ListVocabularies"
+                # These actions only support Resource: “*”
+                Resource: "*"
+                Effect: "Allow"
+              - Action:
+                - "logs:CreateLogGroup"
+                - "logs:CreateLogStream"
+                - "logs:PutLogEvents"
+                Resource: "arn:aws:logs:*:*:*:*"
+                Effect: Allow
+              - Action:
+                - "s3:GetObject"
+                - "s3:PutObject"
+                Resource: !Sub "arn:aws:s3:::${Dataplane}/*"
+                Effect: "Allow"
+              - Action: "lambda:InvokeFunction"
+                Resource: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerArn
+                Effect: "Allow"
+
+  translateRole:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "the policy actions used in this role require * resource"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+      Policies:
+        - PolicyName: "TranslateAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                - "translate:GetTerminology"
+                - "translate:ListTerminologies"
+                - "translate:ImportTerminology"
+                - "translate:TranslateText"
+                # We must use Resource: “*” because Translate does not support specifying
+                # anything else.
+                Resource: "*"
+                Effect: "Allow"
+              - Action:
+                - "logs:CreateLogGroup"
+                - "logs:CreateLogStream"
+                - "logs:PutLogEvents"
+                Resource: "arn:aws:logs:*:*:*:*"
+                Effect: Allow
+              - Action:
+                - "s3:GetObject"
+                - "s3:PutObject"
+                Resource: !Sub "arn:aws:s3:::${Dataplane}/*"
+                Effect: "Allow"
+              - Action: "lambda:InvokeFunction"
+                Resource: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerArn
+                Effect: "Allow"
+
+  pollyRole:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "the policy actions used in this role require * resource"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+          - Action: "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service: "comprehend.amazonaws.com"
+      Policies:
+        - PolicyName: "PollyAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                - "polly:DescribeVoices"
+                - "polly:GetSpeechSynthesisTask"
+                - "polly:ListSpeechSynthesisTasks"
+                - "polly:StartSpeechSynthesisTask"
+                - "polly:SynthesizeSpeech"
+                - "comprehend:DetectDominantLanguage"
+                # These actions only support Resource: “*”
+                Resource: "*"
+                Effect: "Allow"
+              - Action:
+                - "polly:ListLexicons"
+                - "polly:GetLexicon"
+                Resource: "arn:aws:polly:region:account-id:lexicon/*"
+                Effect: "Allow"
+              - Action:
+                - "logs:CreateLogGroup"
+                - "logs:CreateLogStream"
+                - "logs:PutLogEvents"
+                Resource: "arn:aws:logs:*:*:*:*"
+                Effect: Allow
+              - Action:
+                - "s3:GetObject"
+                - "s3:PutObject"
+                Resource: !Sub "arn:aws:s3:::${Dataplane}/*"
+                Effect: "Allow"
+              - Action: "lambda:InvokeFunction"
+                Resource: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerArn
+                Effect: "Allow"
+
+  comprehendS3Role:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "Each MIE Lambda function needs permission to read/write to the dataplane bucket"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "comprehend.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: "ComprehendAllowS3"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                - "s3:GetObject"
+                - "s3:PutObject"
+                Resource: !Sub "arn:aws:s3:::${Dataplane}/*"
+                Effect: "Allow"
+              - Action:
+                - "s3:ListBucket"
+                Resource: !Sub "arn:aws:s3:::${Dataplane}"
+                Effect: "Allow"
+
+  comprehendRole:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "the policy actions used in this role require * resource"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+      Policies:
+        - PolicyName: "comprehendAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                - iam:PassRole
+                Resource: !GetAtt "comprehendS3Role.Arn"
+                Effect: "Allow"
+              - Action:
+                - "logs:CreateLogGroup"
+                - "logs:CreateLogStream"
+                - "logs:PutLogEvents"
+                Resource: "arn:aws:logs:*:*:*:*"
+                Effect: "Allow"
+              - Action:
+                - "s3:GetObject"
+                - "s3:PutObject"
+                Resource: !Sub "arn:aws:s3:::${Dataplane}/*"
+                Effect: "Allow"
+              - Action:
+                - "comprehend:StartEntitiesDetectionJob"
+                - "comprehend:DetectSentiment"
+                - "comprehend:DescribeEntityRecognizer"
+                - "comprehend:ListTopicsDetectionJobs"
+                - "comprehend:DescribeDominantLanguageDetectionJob"
+                - "comprehend:StopTrainingEntityRecognizer"
+                - "comprehend:DescribeDocumentClassificationJob"
+                - "comprehend:StopSentimentDetectionJob"
+                - "comprehend:StartDominantLanguageDetectionJob"
+                - "comprehend:StartTopicsDetectionJob"
+                - "comprehend:DetectDominantLanguage"
+                - "comprehend:CreateDocumentClassifier"
+                - "comprehend:ListEntityRecognizers"
+                - "comprehend:ListSentimentDetectionJobs"
+                - "comprehend:BatchDetectSyntax"
+                - "comprehend:StartSentimentDetectionJob"
+                - "comprehend:ListDominantLanguageDetectionJobs"
+                - "comprehend:ListDocumentClassifiers"
+                - "comprehend:DescribeKeyPhrasesDetectionJob"
+                - "comprehend:CreateEntityRecognizer"
+                - "comprehend:ListKeyPhrasesDetectionJobs"
+                - "comprehend:DescribeSentimentDetectionJob"
+                - "comprehend:DescribeTopicsDetectionJob"
+                - "comprehend:StopDominantLanguageDetectionJob"
+                - "comprehend:BatchDetectSentiment"
+                - "comprehend:StartKeyPhrasesDetectionJob"
+                - "comprehend:BatchDetectEntities"
+                - "comprehend:BatchDetectKeyPhrases"
+                - "comprehend:ListEntitiesDetectionJobs"
+                - "comprehend:StopKeyPhrasesDetectionJob"
+                - "comprehend:ListDocumentClassificationJobs"
+                - "comprehend:DetectSyntax"
+                - "comprehend:DescribeEntitiesDetectionJob"
+                - "comprehend:StopTrainingDocumentClassifier"
+                - "comprehend:ListTagsForResource"
+                - "comprehend:DescribeDocumentClassifier"
+                - "comprehend:StopEntitiesDetectionJob"
+                - "comprehend:BatchDetectDominantLanguage"
+                - "comprehend:StartDocumentClassificationJob"
+                - "comprehend:DetectEntities"
+                - "comprehend:DetectKeyPhrases"
+                # These actions only support Resource: “*”
+                Resource: "*"
+                Effect: "Allow"
+              - Action: "lambda:InvokeFunction"
+                Resource: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerArn
+                Effect: "Allow"
+
+  rekognitionSNSRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+            - "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service: "rekognition.amazonaws.com"
+      Policies:
+      - PolicyName: "RekognitionSNSPublishPolicy"
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Action:
+                - sns:Publish
+              Resource: !Ref "snsRekognitionTopic"
+              Effect: "Allow"
+
+  rekognitionLambdaRole:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "the policy actions used in this role require * resource"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+            - "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+      Policies:
+        - PolicyName: "rekognitionAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                - iam:PassRole
+                Resource: !GetAtt "rekognitionSNSRole.Arn"
+                Effect: "Allow"
+              - Action: "lambda:InvokeFunction"
+                Resource: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerArn
+                Effect: "Allow"
+              - Action:
+                - "logs:CreateLogGroup"
+                - "logs:CreateLogStream"
+                - "logs:PutLogEvents"
+                Resource: "arn:aws:logs:*:*:*:*"
+                Effect: "Allow"
+              - Action:
+                - "s3:GetObject"
+                Resource: !Sub "arn:aws:s3:::${Dataplane}/*"
+                Effect: "Allow"
+              - Action:
+                - "rekognition:DetectFaces"
+                - "rekognition:DetectLabels"
+                - "rekognition:DetectModerationLabels"
+                - "rekognition:GetCelebrityRecognition"
+                - "rekognition:GetContentModeration"
+                - "rekognition:GetFaceDetection"
+                - "rekognition:GetFaceSearch"
+                - "rekognition:GetLabelDetection"
+                - "rekognition:GetPersonTracking"
+                - "rekognition:RecognizeCelebrities"
+                - "rekognition:StartCelebrityRecognition"
+                - "rekognition:StartContentModeration"
+                - "rekognition:StartFaceDetection"
+                - "rekognition:StartFaceSearch"
+                - "rekognition:StartLabelDetection"
+                - "rekognition:StartPersonTracking"
+                # These Rekognition actions do not support resource-level permissions, so we must
+                # use Resource: “*”
+                Resource: "*"
+                Effect: "Allow"
+              - Action:
+                - "rekognition:DescribeCollection"
+                - "rekognition:SearchFaces"
+                - "rekognition:SearchFacesByImage"
+                Resource:
+                  - !Sub "arn:aws:rekognition:${AWS::Region}:${AWS::AccountId}:collection/*"
+                Effect: "Allow"
+
+  StepFunctionRole:
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W76
+            reason: "Allow SPCM for IAM policy document to be higher than 25"
+    Type: "AWS::IAM::Role"
+    Properties:
+      Tags:
+        -
+          Key: "environment"
+          Value: "mie"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service: "states.amazonaws.com"
+      Policies:
+        - PolicyName: "MieSfnLambdaAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action: "lambda:InvokeFunction"
+                Resource:
+                  - !GetAtt startGenericDataLookup.Arn
+                  - !GetAtt startKeyPhrases.Arn
+                  - !GetAtt getKeyPhrases.Arn
+                  - !GetAtt startEntityDetection.Arn
+                  - !GetAtt getEntityDetection.Arn
+                  - !GetAtt startCelebrityRecognition.Arn
+                  - !GetAtt checkCelebrityRecognition.Arn
+                  - !GetAtt startContentModeration.Arn
+                  - !GetAtt checkContentModeration.Arn
+                  - !GetAtt startFaceDetection.Arn
+                  - !GetAtt checkFaceDetection.Arn
+                  - !GetAtt startFaceSearch.Arn
+                  - !GetAtt checkFaceSearch.Arn
+                  - !GetAtt startLabelDetection.Arn
+                  - !GetAtt checkLabelDetection.Arn
+                  - !GetAtt startPersonTracking.Arn
+                  - !GetAtt checkPersonTracking.Arn
+                  - !GetAtt StartMediaConvertFunction.Arn
+                  - !GetAtt StartThumbnailFunction.Arn
+                  - !GetAtt CheckThumbnailFunction.Arn
+                  - !GetAtt Mediainfo.Arn
+                  - !GetAtt CheckMediaConvertFunction.Arn
+                  - !GetAtt StartTranscribeFunction.Arn
+                  - !GetAtt CheckTranscribeFunction.Arn
+                  - !GetAtt TranslateFunction.Arn
+                  - !GetAtt StartPollyFunction.Arn
+                  - !GetAtt CheckPollyFunction.Arn
+                  - !GetAtt FilterOperationLambda.Arn
+                  - !GetAtt CompleteStageLambda.Arn
+                Effect: "Allow"
+
+  # Lambda functions
+
+  # This is a generic Lambda function for getting metadata from JSON file in S3:
+  startGenericDataLookup:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "generic_data_lookup.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt genericDataLookupLambdaRole.Arn
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "generic_data_lookup.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 300
+      Environment:
+        Variables:
+          OPERATOR_NAME: "GenericDataLookup"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DataLookupRole: !GetAtt genericDataLookupLambdaRole.Arn
+
+  # Mediainfo
+
+  Mediainfo:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "mediainfo.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt mediainfoLambdaRole.Arn
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "mediainfo.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 300
+      Environment:
+        Variables:
+          OPERATOR_NAME: "Mediainfo"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DataLookupRole: !GetAtt mediainfoLambdaRole.Arn
+          LD_LIBRARY_PATH: "/opt/python/"
+
+  # Comprehend
+
+  startKeyPhrases:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "start_key_phrases.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt comprehendRole.Arn
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "start_key_phrases.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 300
+      Environment:
+        Variables:
+          OPERATOR_NAME: "comprehendStartKeyPhrases"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          comprehendRole: !GetAtt comprehendS3Role.Arn
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  getKeyPhrases:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "get_key_phrases.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt comprehendRole.Arn
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "get_key_phrases.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 300
+      Environment:
+        Variables:
+          OPERATOR_NAME: "comprehendGetKeyPhrases"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          comprehendRole: !GetAtt comprehendS3Role.Arn
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  startEntityDetection:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "start_entity_detection.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt comprehendRole.Arn
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "start_entity_detection.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 300
+      Environment:
+        Variables:
+          OPERATOR_NAME: "comprehendStartEntityDetection"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          comprehendRole: !GetAtt comprehendS3Role.Arn
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  getEntityDetection:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "get_entity_detection.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt comprehendRole.Arn
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "get_entity_detection.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 300
+      Environment:
+        Variables:
+          OPERATOR_NAME: "comprehendEntityDetection"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          comprehendRole: !GetAtt comprehendS3Role.Arn
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+
+  # Rekognition
+
+  startCelebrityRecognition:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "start_celebrity_recognition.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt "rekognitionLambdaRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "start_celebrity_recognition.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 120
+      Environment:
+        Variables:
+          REKOGNITION_SNS_TOPIC_ARN: !Ref "snsRekognitionTopic"
+          REKOGNITION_ROLE_ARN: !GetAtt "rekognitionSNSRole.Arn"
+          OPERATOR_NAME: "celebrityRecognition"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  checkCelebrityRecognition:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "check_celebrity_recognition_status.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt "rekognitionLambdaRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "check_celebrity_recognition_status.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 120
+      Environment:
+        Variables:
+          REKOGNITION_ROLE_ARN: !GetAtt "rekognitionSNSRole.Arn"
+          OPERATOR_NAME: "celebrityRecognition"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  startContentModeration:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "start_content_moderation.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt "rekognitionLambdaRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "start_content_moderation.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 120
+      Environment:
+        Variables:
+          REKOGNITION_SNS_TOPIC_ARN: !Ref "snsRekognitionTopic"
+          REKOGNITION_ROLE_ARN: !GetAtt "rekognitionSNSRole.Arn"
+          OPERATOR_NAME: "contentModeration"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  checkContentModeration:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "check_content_moderation_status.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt "rekognitionLambdaRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "check_content_moderation_status.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 120
+      Environment:
+        Variables:
+          REKOGNITION_ROLE_ARN: !GetAtt "rekognitionSNSRole.Arn"
+          OPERATOR_NAME: "contentModeration"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  startFaceDetection:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "start_face_detection.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt "rekognitionLambdaRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "start_face_detection.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 120
+      MemorySize: 256
+      Environment:
+        Variables:
+          REKOGNITION_SNS_TOPIC_ARN: !Ref "snsRekognitionTopic"
+          REKOGNITION_ROLE_ARN: !GetAtt "rekognitionSNSRole.Arn"
+          OPERATOR_NAME: "faceDetection"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  checkFaceDetection:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "check_face_detection_status.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt "rekognitionLambdaRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "check_face_detection_status.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          REKOGNITION_ROLE_ARN: !GetAtt "rekognitionSNSRole.Arn"
+          OPERATOR_NAME: "faceDetection"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  startFaceSearch:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "start_face_search.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt "rekognitionLambdaRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "start_face_search.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 120
+      MemorySize: 256
+      Environment:
+        Variables:
+          REKOGNITION_SNS_TOPIC_ARN: !Ref "snsRekognitionTopic"
+          REKOGNITION_ROLE_ARN: !GetAtt "rekognitionSNSRole.Arn"
+          OPERATOR_NAME: "faceSearch"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  checkFaceSearch:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "check_face_search_status.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt "rekognitionLambdaRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "check_face_search_status.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 120
+      MemorySize: 256
+      Environment:
+        Variables:
+          REKOGNITION_ROLE_ARN: !GetAtt "rekognitionSNSRole.Arn"
+          OPERATOR_NAME: "faceSearch"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  startLabelDetection:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "start_label_detection.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt "rekognitionLambdaRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "start_label_detection.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Environment:
+        Variables:
+          REKOGNITION_SNS_TOPIC_ARN: !Ref "snsRekognitionTopic"
+          REKOGNITION_ROLE_ARN: !GetAtt "rekognitionSNSRole.Arn"
+          OPERATOR_NAME: "labelDetection"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  checkLabelDetection:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "check_label_detection_status.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt "rekognitionLambdaRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "check_label_detection_status.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 240
+      MemorySize: 256
+      Environment:
+        Variables:
+          REKOGNITION_ROLE_ARN: !GetAtt "rekognitionSNSRole.Arn"
+          OPERATOR_NAME: "labelDetection"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  startPersonTracking:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "start_person_tracking.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt "rekognitionLambdaRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "start_person_tracking.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Environment:
+        Variables:
+          REKOGNITION_SNS_TOPIC_ARN: !Ref "snsRekognitionTopic"
+          REKOGNITION_ROLE_ARN: !GetAtt "rekognitionSNSRole.Arn"
+          OPERATOR_NAME: "personTracking"
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  checkPersonTracking:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "check_person_tracking_status.lambda_handler"
+      Layers:
+        - !Ref MediaInsightsEnginePython37Layer
+      Role: !GetAtt "rekognitionLambdaRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "check_person_tracking_status.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 120
+      MemorySize: 256
+      Environment:
+        Variables:
+          REKOGNITION_ROLE_ARN: !GetAtt "rekognitionSNSRole.Arn"
+          OPERATOR_NAME: "personTracking"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  # Mediaconvert Lambdas
+
+  StartMediaConvertFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "start_media_convert.lambda_handler"
+      Layers:
+        - !Ref "MediaInsightsEnginePython37Layer"
+      Role: !GetAtt "mediaConvertLambdaRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "start_media_convert.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 60
+      Environment:
+        Variables:
+          mediaconvertRole: !GetAtt "mediaConvertS3Role.Arn"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+
+  StartThumbnailFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "start_thumbnail.lambda_handler"
+      Layers:
+        - !Ref "MediaInsightsEnginePython37Layer"
+      Role: !GetAtt "mediaConvertLambdaRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "start_thumbnail.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 60
+      Environment:
+        Variables:
+          mediaconvertRole: !GetAtt "mediaConvertS3Role.Arn"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+
+  CheckThumbnailFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "check_thumbnail.lambda_handler"
+      Layers:
+        - !Ref "MediaInsightsEnginePython37Layer"
+      Role: !GetAtt "mediaConvertLambdaRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "check_thumbnail.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 60
+      Environment:
+        Variables:
+          mediaconvertRole: !GetAtt "mediaConvertS3Role.Arn"
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+
+  CheckMediaConvertFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "get_media_convert.lambda_handler"
+      Layers:
+        - !Ref "MediaInsightsEnginePython37Layer"
+      Role: !GetAtt "mediaConvertLambdaRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "get_media_convert.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 60
+      Environment:
+        Variables:
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+
+  # Transcribe Lambdas
+
+  StartTranscribeFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "start_transcribe.lambda_handler"
+      Layers:
+        - !Ref "MediaInsightsEnginePython37Layer"
+      Role: !GetAtt "transcribeRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "start_transcribe.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Environment:
+        Variables:
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  CheckTranscribeFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "get_transcribe.lambda_handler"
+      Layers:
+        - !Ref "MediaInsightsEnginePython37Layer"
+      Role: !GetAtt "transcribeRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "get_transcribe.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 120
+      MemorySize: 256
+      Environment:
+        Variables:
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  # Translate Lambdas
+
+  TranslateFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "start_translate.lambda_handler"
+      Layers:
+        - !Ref "MediaInsightsEnginePython37Layer"
+      Role: !GetAtt "translateRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "start_translate.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Timeout: 300
+      MemorySize: 256
+      Environment:
+        Variables:
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  # Polly Lambdas
+
+  StartPollyFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "start_polly.lambda_handler"
+      Layers:
+        - !Ref "MediaInsightsEnginePython37Layer"
+      Role: !GetAtt "pollyRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "start_polly.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Environment:
+        Variables:
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  CheckPollyFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "get_polly.lambda_handler"
+      Layers:
+        - !Ref "MediaInsightsEnginePython37Layer"
+      Role: !GetAtt "pollyRole.Arn"
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+            "/",
+            [
+            !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+            "get_polly.zip",
+            ],
+          ]
+      Runtime: "python3.7"
+      Environment:
+        Variables:
+          DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.APIHandlerName
+          DATAPLANE_BUCKET: !Ref "Dataplane"
+          botoConfig: '{"user_agent": "aws-tm-mie/python3.7/lambda"}'
+
+  # Register as operators in the control plane
+
+  GenericDataLookupOperation:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "GenericDataLookup"
+      Type: "Sync"
+      Configuration: { "MediaType": "Video", "Enabled": true }
+      StartLambdaArn: !GetAtt startGenericDataLookup.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  MediainfoOperation:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "Mediainfo"
+      Type: "Sync"
+      Configuration: { "MediaType": "Video", "Enabled": true }
+      StartLambdaArn: !GetAtt Mediainfo.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  MediainfoOperationImage:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "MediainfoImage"
+      Type: "Sync"
+      Configuration: { "MediaType": "Image", "Enabled": true }
+      StartLambdaArn: !GetAtt Mediainfo.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  MediaconvertOperation:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "Mediaconvert"
+      Type: "Async"
+      Configuration: { "MediaType": "Video", "Enabled": false }
+      StartLambdaArn: !GetAtt StartMediaConvertFunction.Arn
+      MonitorLambdaArn: !GetAtt CheckMediaConvertFunction.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  ThumbnailOperation:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "Thumbnail"
+      Type: "Async"
+      Configuration: { "MediaType": "Video", "Enabled": true }
+      StartLambdaArn: !GetAtt StartThumbnailFunction.Arn
+      MonitorLambdaArn: !GetAtt CheckThumbnailFunction.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  TranscribeOperation:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "Transcribe"
+      Type: "Async"
+      Configuration:
+        { "TranscribeLanguage": "en-US", "MediaType": "Audio", "Enabled": true }
+      StartLambdaArn: !GetAtt StartTranscribeFunction.Arn
+      MonitorLambdaArn: !GetAtt CheckTranscribeFunction.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  TranslateOperation:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "Translate"
+      Type: "Sync"
+      Configuration:
+        {
+          "MediaType": "Text",
+          "TargetLanguageCode": "ru",
+          "Enabled": true,
+          "SourceLanguageCode": "en",
+        }
+      StartLambdaArn: !GetAtt TranslateFunction.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  PollyOperation:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "Polly"
+      Type: "Async"
+      Configuration: { "MediaType": "Text", "Enabled": false }
+      StartLambdaArn: !GetAtt StartPollyFunction.Arn
+      MonitorLambdaArn: !GetAtt CheckPollyFunction.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  comprehendPhrasesOperation:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "ComprehendKeyPhrases"
+      Type: "Async"
+      Configuration: { "MediaType": "Text", "Enabled": true }
+      StartLambdaArn: !GetAtt startKeyPhrases.Arn
+      MonitorLambdaArn: !GetAtt getKeyPhrases.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  comprehendEntitiesOperation:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "ComprehendEntities"
+      Type: "Async"
+      Configuration: { "MediaType": "Text", "Enabled": true }
+      StartLambdaArn: !GetAtt startEntityDetection.Arn
+      MonitorLambdaArn: !GetAtt getEntityDetection.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  celebrityRecognitionOperation:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "celebrityRecognition"
+      Type: "Async"
+      Configuration: { "MediaType": "Video", "Enabled": true }
+      StartLambdaArn: !GetAtt startCelebrityRecognition.Arn
+      MonitorLambdaArn: !GetAtt checkCelebrityRecognition.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  celebrityRecognitionOperationImage:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "celebrityRecognitionImage"
+      Type: "Sync"
+      Configuration: { "MediaType": "Image", "Enabled": true }
+      StartLambdaArn: !GetAtt startCelebrityRecognition.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  contentModerationOperation:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "contentModeration"
+      Type: "Async"
+      Configuration: { "MediaType": "Video", "Enabled": true }
+      StartLambdaArn: !GetAtt startContentModeration.Arn
+      MonitorLambdaArn: !GetAtt checkContentModeration.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  contentModerationOperationImage:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "contentModerationImage"
+      Type: "Sync"
+      Configuration: { "MediaType": "Image", "Enabled": true }
+      StartLambdaArn: !GetAtt startContentModeration.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  faceDetectionOperation:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "faceDetection"
+      Type: "Async"
+      Configuration: { "MediaType": "Video", "Enabled": true }
+      StartLambdaArn: !GetAtt startFaceDetection.Arn
+      MonitorLambdaArn: !GetAtt checkFaceDetection.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  faceDetectionOperationImage:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "faceDetectionImage"
+      Type: "Sync"
+      Configuration: { "MediaType": "Image", "Enabled": true }
+      StartLambdaArn: !GetAtt startFaceDetection.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  faceSearchOperation:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "faceSearch"
+      Type: "Async"
+      Configuration: { "MediaType": "Video", "Enabled": true }
+      StartLambdaArn: !GetAtt startFaceSearch.Arn
+      MonitorLambdaArn: !GetAtt checkFaceSearch.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  faceSearchOperationImage:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "faceSearchImage"
+      Type: "Sync"
+      Configuration: { "MediaType": "Image", "Enabled": true }
+      StartLambdaArn: !GetAtt startFaceSearch.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  labelDetectionOperation:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "labelDetection"
+      Type: "Async"
+      Configuration: { "MediaType": "Video", "Enabled": true }
+      StartLambdaArn: !GetAtt startLabelDetection.Arn
+      MonitorLambdaArn: !GetAtt checkLabelDetection.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  labelDetectionOperationImage:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "labelDetectionImage"
+      Type: "Sync"
+      Configuration: { "MediaType": "Image", "Enabled": true }
+      StartLambdaArn: !GetAtt startLabelDetection.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  personTrackingOperation:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+      ResourceType: "Operation"
+      Name: "personTracking"
+      Type: "Async"
+      Configuration: { "MediaType": "Video", "Enabled": false }
+      StartLambdaArn: !GetAtt startPersonTracking.Arn
+      MonitorLambdaArn: !GetAtt checkPersonTracking.Arn
+      StateMachineExecutionRoleArn: !GetAtt StepFunctionRole.Arn
+
+  RekognitionWorkflow:
+    DependsOn:
+      - MediaInsightsWorkflowApi
+      - MediaInsightsDataplaneApiStack
+      - StepFunctionRole
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: !Join
+        - ''
+        - - 'https://'
+          - !FindInMap ["SourceCode", "General", "GlobalS3Bucket"]
+          - .s3
+          - '.amazonaws.com/'
+          - !FindInMap
+            - SourceCode
+            - General
+            - TemplateKeyPrefix
+          - "/rekognition.template"
+      Parameters:
+        StepfunctionRoleArn: !GetAtt StepFunctionRole.Arn
+        WorkflowCustomResourceArn:
+          Fn::GetAtt:
+            - MediaInsightsWorkflowApi
+            - Outputs.WorkflowCustomResourceArn
+        MediainfoImage: !GetAtt MediainfoOperationImage.Name
+        CelebRecognitionImage: !GetAtt celebrityRecognitionOperationImage.Name
+        ContentModerationImage: !GetAtt contentModerationOperationImage.Name
+        FaceDetectionImage: !GetAtt faceDetectionOperationImage.Name
+        FaceSearchImage: !GetAtt faceSearchOperationImage.Name
+        LabelDetectionImage: !GetAtt labelDetectionOperationImage.Name
+
+  KitchenSinkWorkflow:
+    DependsOn:
+      - MediaInsightsWorkflowApi
+      - MediaInsightsDataplaneApiStack
+      - StepFunctionRole
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: !Join
+        - ''
+        - - 'https://'
+          - !FindInMap ["SourceCode", "General", "GlobalS3Bucket"]
+          - .s3
+          - '.amazonaws.com/'
+          - !FindInMap
+            - SourceCode
+            - General
+            - TemplateKeyPrefix
+          - "/MieCompleteWorkflow.template"
+      Parameters:
+        StepfunctionRoleArn: !GetAtt StepFunctionRole.Arn
+        WorkflowCustomResourceArn:
+          Fn::GetAtt:
+            - MediaInsightsWorkflowApi
+            - Outputs.WorkflowCustomResourceArn
+        GenericDataLookup: !GetAtt GenericDataLookupOperation.Name
+        CelebRecognition: !GetAtt celebrityRecognitionOperation.Name
+        ContentModeration: !GetAtt contentModerationOperation.Name
+        FaceDetection: !GetAtt faceDetectionOperation.Name
+        FaceSearch: !GetAtt faceSearchOperation.Name
+        LabelDetection: !GetAtt labelDetectionOperation.Name
+        PersonTracking: !GetAtt personTrackingOperation.Name
+        Mediaconvert: !GetAtt MediaconvertOperation.Name
+        Mediainfo: !GetAtt MediainfoOperation.Name
+        Thumbnail: !GetAtt ThumbnailOperation.Name
+        Transcribe: !GetAtt TranscribeOperation.Name
+        Translate: !GetAtt TranslateOperation.Name
+        ComprehendPhrases: !GetAtt comprehendPhrasesOperation.Name
+        ComprehendEntities: !GetAtt comprehendEntitiesOperation.Name
+        Polly: !GetAtt PollyOperation.Name
+
+  # Auto build/deploy webapp
+
+  StringFunctions:
+    Condition: DeployDemoSiteCondition
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: !Join
+        - ''
+        - - 'https://'
+          - !FindInMap ["SourceCode", "General", "GlobalS3Bucket"]
+          - .s3
+          - '.amazonaws.com/'
+          - !FindInMap
+            - SourceCode
+            - General
+            - TemplateKeyPrefix
+          - "/string.template"
+
+  MediaInsightsWebApp:
+    Condition: DeployDemoSiteCondition
+    DependsOn:
+      - StringFunctions
+      - Analytics
+      - MediaInsightsWorkflowApi
+      - MediaInsightsDataplaneApiStack
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: !Join
+        - ''
+        - - 'https://'
+          - !FindInMap ["SourceCode", "General", "GlobalS3Bucket"]
+          - .s3
+          - '.amazonaws.com/'
+          - !FindInMap
+            - SourceCode
+            - General
+            - TemplateKeyPrefix
+          - "/media-insights-webapp.template"
+      Parameters:
+        DataplaneEndpoint: !GetAtt MediaInsightsDataplaneApiStack.Outputs.EndpointURL
+        WorkflowEndpoint: !GetAtt MediaInsightsWorkflowApi.Outputs.EndpointURL
+        ElasticEndpoint: !GetAtt Analytics.Outputs.ElasticUrl
+        DataplaneBucket: !Ref Dataplane
+        UserPoolId: !Ref MieUserPool
+        IdentityPoolId: !Ref MieIdentityPool
+        AwsRegion: !Ref "AWS::Region"
+        PoolClientId: !Ref MieWebAppClient
+
+  AnonymousDataCustomResourceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        -
+          PolicyName: !Sub "${AWS::StackName}-anonymous-data-logger"
+          PolicyDocument:
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Join ["", ["arn:aws:logs:", Ref: "AWS::Region", ":", Ref: "AWS::AccountId", ":log-group:/aws/lambda/*"]]
+              -
+                Effect: Allow
+                Action:
+                  - ssm:PutParameter
+                Resource:
+                  - !Join ["", ["arn:aws:ssm:", Ref: "AWS::Region", ":", Ref: "AWS::AccountId", ":parameter/*"]]
+
+  AnonymousDataCustomResource:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-anonymous-data
+      Description: Used to send anonymous data
+      Handler: lambda.handler
+      Role: !GetAtt AnonymousDataCustomResourceRole.Arn
+      Code:
+        S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key: !Join ["/", [!FindInMap ["SourceCode", "General", "CodeKeyPrefix"], "anonymous-data-logger.zip"]]
+      Runtime:  python3.8
+      Timeout: 180
+
+  # Metrics
+  AnonymousDataUuid:
+    Condition: Metrics
+    Type: "Custom::UUID"
+    Properties:
+      ServiceToken: !GetAtt AnonymousDataCustomResource.Arn
+      Resource: UUID
+
+  AnonymousMetric:
+    Condition: Metrics
+    Type: "Custom::AnonymousMetric"
+    Properties:
+      ServiceToken: !GetAtt AnonymousDataCustomResource.Arn
+      Resource: AnonymousMetric
+      SolutionId: "SO0042"
+      UUID: !GetAtt AnonymousDataUuid.UUID
+      Version: "1.0"
+
+Outputs:
+  UUID:
+    Condition: Metrics
+    Description: AnonymousMetric UUID
+    Value: !GetAtt AnonymousDataUuid.UUID
+  DataplaneBucket:
+    Description: Bucket used to store transformed media object from workflow execution
+    Value: !Ref Dataplane
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", DataplaneBucket]]
+  DataplaneApiEndpoint:
+    Description: Endpoint for data persisitence API
+    Value: !GetAtt MediaInsightsDataplaneApiStack.Outputs.EndpointURL
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", DataplaneApiEndpoint]]
+  WorkflowCustomResourceArn:
+    Description: Custom resource for creating operations, stages and workflows using CloudFormation
+    Value: !GetAtt MediaInsightsWorkflowApi.Outputs.WorkflowCustomResourceArn
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", WorkflowCustomResourceArn]]
+  WorkflowApiEndpoint:
+    Description: Endpoint for workflow Creation, Execution and Monitoring API
+    Value: !GetAtt MediaInsightsWorkflowApi.Outputs.EndpointURL
+    Export:
+      Name: !Join [":", [!Ref "AWS::StackName", WorkflowApiEndpoint]]
+  MediaInsightsWebAppUrl:
+    Condition: DeployDemoSiteCondition
+    Description: Url of the Media Insights Engine sample web application
+    Value: !GetAtt MediaInsightsWebApp.Outputs.CloudfrontUrl
+  ElasticsearchEndpoint:
+    Description: Endpoint for elasticsearch cluster
+    Value: !GetAtt Analytics.Outputs.ElasticUrl
+  MediaInsightsEnginePython37Layer:
+    Description: Lambda layer for Python libraries
+    Value: !Ref MediaInsightsEnginePython37Layer
+    Export:
+      Name:
+        !Join [":", [!Ref "AWS::StackName", MediaInsightsEnginePython37Layer]]
+  UserPoolId:
+    Description: ID of the MIE Cognito User Pool
+    Value: !Ref MieUserPool
+  AdminClientId:
+    Description: ID of the Admin Cognito Client. This can be used to authenticate command-line apps using boto3.
+    Value: !Ref MieAdminClient
+  WebAppClientId:
+    Description: ID of the Webapp Cognito Client. This can be used to authenticate web apps using Amplify.
+    Value: !Ref MieWebAppClient
+  AdminUsername:
+    Description: Username of the default MIE admin
+    Value: !Ref AdminEmail
