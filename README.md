@@ -1,12 +1,10 @@
 # AWS Content Analysis Solution
 
-This repository includes the source code for the AWS Content Analysis solution. This solution combines Amazon Rekognition, Amazon Transcribe, Amazon Translate, and Amazon Comprehend to offer an integrated suite of capabilities for cataloging and analyzing videos. This solution was built using the [Media Insights Engine](https://github.com/awslabs/aws-media-insights-engine).
+This repository includes the source code for the [AWS Content Analysis](https://aws.amazon.com/solutions/implementations/aws-content-analysis/) solution. The automation this solution provides can dramatically reduce the human involvement needed to catalog video archives for search. This solution is also useful to see at-a-glance the insights AWS AI services generate for your own content.
 
-The documentation for this solution can be found in the following locations:
+This solution combines Amazon Rekognition, Amazon Transcribe, Amazon Translate, and Amazon Comprehend to offer an integrated suite of capabilities for cataloging and analyzing videos. This solution was built using the [Media Insights Engine](https://github.com/awslabs/aws-media-insights-engine).
 
-* Landing page: https://aws.amazon.com/solutions/implementations/aws-content-analysis/
-* PDF: https://s3.amazonaws.com/solutions-reference/aws-content-analysis/latest/aws-content-analysis.pdf
-* HTML guide: https://docs.aws.amazon.com/solutions/latest/aws-content-analysis/
+The documentation for using this solution and understanding its infrastructure can be found [here](https://docs.aws.amazon.com/solutions/latest/aws-content-analysis/). This README contains instructions for creating a custom build of the solution source code.
  
 # Screenshots
  
