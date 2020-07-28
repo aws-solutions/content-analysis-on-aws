@@ -114,6 +114,7 @@
                   "Effect": "Allow",
                   "Action": [
                     "states:ListStateMachines",
+                    "states:DescribeStateMachine",
                     "states:TagResource",
                     "states:CreateStateMachine"
                   ],
@@ -243,6 +244,7 @@
                   "Effect": "Allow",
                   "Action": [
                     "states:ListStateMachines",
+                    "states:DescribeStateMachine",
                     "states:TagResource",
                     "states:CreateStateMachine"
                   ],
