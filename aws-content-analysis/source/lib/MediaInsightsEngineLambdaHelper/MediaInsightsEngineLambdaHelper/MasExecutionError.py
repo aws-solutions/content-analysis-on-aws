@@ -1,0 +1,2 @@
+class MasExecutionError(Exception):
+    pass
