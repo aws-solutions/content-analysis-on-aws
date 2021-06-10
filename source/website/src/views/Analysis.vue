@@ -326,7 +326,8 @@
         if (this.mediaType === "video") {
           const dataplane_bucket = this.s3_uri.split("/")[2]
           const input_media_key = this.s3_uri.split(dataplane_bucket)[1]
-          const media_filename = input_media_key.replace('/public/upload', '')
+          const input_media_key_delimited = input_media_key.split("/")
+          const media_filename = input_media_key_delimited[input_media_key_delimited.length - 1]
           const proxy_encode_filename = (media_filename.split(".").slice(0,-1).join('.') + "_proxy.mp4").replace("/", "");
 
           const proxy_encode_key = 'private/assets/' + this.$route.params.asset_id + '/' + proxy_encode_filename
