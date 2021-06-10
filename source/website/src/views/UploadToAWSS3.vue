@@ -756,7 +756,7 @@ export default {
         let wf_id = response.data.Id;
         let executed_asset = {
           asset_id: asset_id,
-          file_name: s3Key,
+          file_name: s3Key.replace('public/upload/', ''),
           workflow_status: "",
           state_machine_console_link: "",
           wf_id: wf_id
