@@ -1,0 +1,1 @@
+The [Implementation Guide](https://github.com/awslabs/aws-media-insights-engine/blob/master/IMPLEMENTATION_GUIDE.md) has been moved to the [Media Insights Engine](https://github.com/awslabs/aws-media-insights-engine/tree/master) repository.

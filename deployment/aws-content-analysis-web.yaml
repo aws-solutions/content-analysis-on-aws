@@ -1,0 +1,307 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "(SO0042) - aws-content-analysis. AWS CloudFormation template that provisions the web application for the AWS Content Analysis solution."
+
+Parameters:
+  DataplaneEndpoint:
+    Type: String
+  WorkflowEndpoint:
+    Type: String
+  ElasticEndpoint:
+    Type: String
+  DataplaneBucket:
+    Type: String
+  UserPoolId:
+    Type: String
+  IdentityPoolId:
+    Type: String
+  PoolClientId:
+    Type: String
+
+Mappings:
+  SourceCode:
+    General:
+      RegionalS3Bucket: "%%REGIONAL_BUCKET_NAME%%"
+      CodeKeyPrefix: "aws-content-analysis/%%VERSION%%"
+      WebsitePrefix: "aws-content-analysis/%%VERSION%%/website"
+
+Resources:
+  # Web application resources
+  # WebsiteBucketNameFunction - derive a name for the website bucket based on the lower case stack name.
+  WebsiteBucketNameFunction:
+    Type: AWS::Lambda::Function
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: "This resource does not need to access any other resource provisioned within a VPC."
+          - id: W92
+            reason: "This function does not performance optimization, so the default concurrency limits suffice."
+    Properties:
+      Code:
+        ZipFile: |
+          import string
+          import random
+          import cfnresponse
+          def handler(event, context):
+              stack_name = event['StackId'].split('/')[1].split('-Uuid')[0]
+              response_data = {'Data': stack_name.lower() + '-website'}
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data, "CustomResourcePhysicalID")
+      Handler: index.handler
+      Runtime: python3.8
+      Role: !GetAtt WebsiteBucketNameExecutionRole.Arn
+
+  WebsiteBucketNameFunctionPermissions:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt WebsiteBucketNameFunction.Arn
+      Principal: 'cloudformation.amazonaws.com'
+
+  WebsiteBucketNameExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 'arn:aws:logs:*:*:*'
+
+  GetWebsiteBucketName:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt WebsiteBucketNameFunction.Arn
+
+  ContentAnalysisWebsiteBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      AccessControl: LogDeliveryWrite
+      BucketName: !GetAtt GetWebsiteBucketName.Data
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      WebsiteConfiguration:
+        IndexDocument: "index.html"
+        ErrorDocument: "index.html"
+      LoggingConfiguration:
+        DestinationBucketName: !GetAtt GetWebsiteBucketName.Data
+        LogFilePrefix: "access_logs/"
+      LifecycleConfiguration:
+        Rules:
+          - Id: "Keep access log for 10 days"
+            Status: Enabled
+            Prefix: "access_logs/"
+            ExpirationInDays: 10
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+          - Id: "Keep cloudfront log for 10 days"
+            Status: Enabled
+            Prefix: "cf_logs/"
+            ExpirationInDays: 10
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+
+  WebBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ContentAnalysisWebsiteBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Deny
+            Principal: "*"
+            Action: "*"
+            Resource: !Sub "arn:aws:s3:::${ContentAnalysisWebsiteBucket}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  CopyWebSource:
+    DependsOn: ContentAnalysisWebsiteBucket
+    Type: Custom::WebsiteDeployHelper
+    Properties:
+      ServiceToken: !GetAtt WebsiteDeployHelper.Arn
+      WebsiteCodeBucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+      WebsiteCodePrefix: !FindInMap ["SourceCode", "General", "WebsitePrefix"]
+      DeploymentBucket: !GetAtt ContentAnalysisWebsiteBucket.DomainName
+
+  ContentAnalysisOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub "access-identity-${ContentAnalysisWebsiteBucket}"
+
+  ContentAnalysisWebsiteBucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: F16
+            reason: "website bucket policy requires a wildcard principal"
+    Properties:
+      Bucket:
+        Ref: "ContentAnalysisWebsiteBucket"
+      PolicyDocument:
+        Statement:
+          - Effect: "Allow"
+            Action:
+              - "s3:GetObject"
+            Resource:
+              - !Sub "arn:aws:s3:::${ContentAnalysisWebsiteBucket}/*"
+            Principal:
+              CanonicalUser: !GetAtt ContentAnalysisOriginAccessIdentity.S3CanonicalUserId
+
+  ContentAnalysisWebsiteDistribution:
+    Type: AWS::CloudFront::Distribution
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W70
+            reason: "Specifying a TLS version is unnecessary because we're using the CloudFront default certificate."
+    Properties:
+      DistributionConfig:
+        Comment: "Website distribution for Content Analysis Solution"
+        Logging:
+          Bucket: !Sub "${ContentAnalysisWebsiteBucket}.s3.amazonaws.com"
+          Prefix: cf_logs/
+          IncludeCookies: true
+        Origins:
+          - Id: S3-solution-website
+            DomainName: !Sub "${ContentAnalysisWebsiteBucket}.s3.${AWS::Region}.amazonaws.com"
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${ContentAnalysisOriginAccessIdentity}"
+        DefaultCacheBehavior:
+          TargetOriginId: S3-solution-website
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+            - PUT
+            - POST
+            - DELETE
+            - PATCH
+          CachedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          ForwardedValues:
+            QueryString: false
+          ViewerProtocolPolicy: redirect-to-https
+        DefaultRootObject: "index.html"
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponsePagePath: "/index.html"
+            ResponseCode: 200
+          - ErrorCode: 403
+            ResponsePagePath: "/index.html"
+            ResponseCode: 200
+        IPV6Enabled: true
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+        Enabled: true
+        HttpVersion: 'http2'
+
+  WebsiteHelperRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "Website helper Lambda requires ability to read / write to both MIE website bucket and MIE build bucket"
+    DependsOn: ContentAnalysisWebsiteBucket
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${AWS::StackName}-WebsiteHelperS3Access"
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                  - "s3:PutObject"
+                  - "s3:ListBucket"
+                Resource:
+                  - !Sub ${ContentAnalysisWebsiteBucket.Arn}/*
+                  - Fn::Sub:
+                      - arn:aws:s3:::${websitecode}/*
+                      - websitecode: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+              - Effect: Allow
+                Action:
+                  - "s3:ListBucket"
+                Resource:
+                  - !Sub ${ContentAnalysisWebsiteBucket.Arn}
+                  - Fn::Sub:
+                      - arn:aws:s3:::${websitecode}
+                      - websitecode:  !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+
+  WebsiteDeployHelper:
+    Type: AWS::Lambda::Function
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: "This resource does not need to access any other resource provisioned within a VPC."
+          - id: W92
+            reason: "This function does not performance optimization, so the default concurrency limits suffice."
+    Properties:
+      Code:
+        S3Bucket:  !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
+        S3Key:
+          !Join [
+              "/",
+            [
+              !FindInMap ["SourceCode", "General", "CodeKeyPrefix"],
+              "websitehelper.zip",
+            ],
+          ]
+      Handler: website_helper.lambda_handler
+      MemorySize: 256
+      Role: !GetAtt WebsiteHelperRole.Arn
+      Runtime: python3.6
+      Timeout: 900
+      Environment:
+        Variables:
+          DataplaneEndpoint: !Ref DataplaneEndpoint
+          WorkflowEndpoint: !Ref WorkflowEndpoint
+          ElasticEndpoint: !Ref ElasticEndpoint
+          DataplaneBucket: !Ref DataplaneBucket
+          UserPoolId: !Ref UserPoolId
+          IdentityPoolId: !Ref IdentityPoolId
+          AwsRegion: !Ref AWS::Region
+          PoolClientId: !Ref PoolClientId
+
+Outputs:
+  CloudfrontUrl:
+    Value: !Join ["", ["https://", !GetAtt ContentAnalysisWebsiteDistribution.DomainName]]
+

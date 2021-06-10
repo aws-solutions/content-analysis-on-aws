@@ -1,0 +1,304 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "(SO0042) - aws-content-analysis. Deploys the AWS Content Analysis Application Cognito Infrastructure"
+
+Parameters:
+  AdminEmail:
+    Description: Email address of the Content Analysis Administrator
+    Type: String
+  WorkflowApiId:
+    Description: REST API ID of the MIE Workflow API
+    Type: String
+  DataplaneApiId:
+    Description: REST API ID of the MIE Dataplane API
+    Type: String
+  ElasticDomainArn:
+    Description: ARN of the Content Analysis ES Domain
+    Type: String
+  DataplaneBucket:
+    Description: Name of the MIE dataplane bucket
+    Type: String
+  ParentStackName:
+    Description: Name of the parent Cloud Formation stack
+    Type: String
+
+Resources:
+  ContentAnalysisUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: True
+        InviteMessageTemplate:
+          EmailMessage: !Join ["", [
+            "Your username is {username} and temporary password is {####}<br>AWS CloudFormation stack:<br>",
+            "https://",
+            Ref: AWS::Region,
+            ".console.aws.amazon.com/cloudformation/home?region=",
+            Ref: AWS::Region,
+            "#/stacks/stackinfo?stackId=",
+            Ref: ParentStackName
+          ]]
+          EmailSubject: "Welcome to AWS Content Analysis"
+      EmailConfiguration:
+        EmailSendingAccount: 'COGNITO_DEFAULT'
+      AutoVerifiedAttributes: ['email']
+
+  ContentAnalysisWebAppClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref ContentAnalysisUserPool
+
+    # Service - cognito / security infrastructure
+
+    # Super hacky lambda for formatting cognito role mapping since cognito is severely lacking in CF support
+    # https://forums.aws.amazon.com/message.jspa?messageID=790437#790437
+    # https://stackoverflow.com/questions/53131052/aws-cloudformation-can-not-create-stack-when-awscognitoidentitypoolroleattac
+
+  CognitoRoleMappingTransformer:
+      Type: AWS::Lambda::Function
+      Metadata:
+        cfn_nag:
+          rules_to_suppress:
+            - id: W89
+              reason: "This resource does not need to access any other resource provisioned within a VPC."
+            - id: W92
+              reason: "This function does not performance optimization, so the default concurrency limits suffice."
+      Properties:
+        Code:
+          ZipFile: |
+            import json
+            import cfnresponse
+
+            def handler(event, context):
+                print("Event: %s" % json.dumps(event))
+                resourceProperties = event["ResourceProperties"]
+                responseData = {
+                    "RoleMapping": {
+                        resourceProperties["IdentityProvider"]: {
+                            "Type": resourceProperties["Type"]
+                        }
+                    }
+                }
+                if resourceProperties["AmbiguousRoleResolution"]:
+                    responseData["RoleMapping"][resourceProperties["IdentityProvider"]]["AmbiguousRoleResolution"] = \
+                    resourceProperties["AmbiguousRoleResolution"]
+
+                print(responseData)
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+        Handler: !Join
+          - ''
+          - - index
+            - .handler
+        Role: !GetAtt CognitoRoleMapperLambdaExecutionRole.Arn
+        Runtime: python3.7
+        Timeout: 30
+
+  CognitoRoleMapperLambdaExecutionRole:
+      Type: 'AWS::IAM::Role'
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action:
+                - 'sts:AssumeRole'
+        Path: /
+        Policies:
+          - PolicyName: root
+            PolicyDocument:
+              Version: 2012-10-17
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 'logs:CreateLogGroup'
+                    - 'logs:CreateLogStream'
+                    - 'logs:PutLogEvents'
+                  Resource: 'arn:aws:logs:*:*:*'
+
+# TODO: Do we even need this?
+#  ContentAnalysisCognitoDomain:
+#    Type: AWS::Cognito::UserPoolDomain
+#    Properties:
+#      Domain: !Ref # TODO: Figure out what to do here
+#      UserPoolId: !Ref ContentAnalysisUserPool
+
+  ContentAnalysisIdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      AllowUnauthenticatedIdentities: False
+      CognitoIdentityProviders:
+        - ClientId: !Ref ContentAnalysisWebAppClient
+          ProviderName: !GetAtt ContentAnalysisUserPool.ProviderName
+
+  # More hacky cfn for getting the role mapping
+  TransformedRoleMapping:
+    Type: Custom::TransformedRoleMapping
+    Properties:
+      ServiceToken: !GetAtt CognitoRoleMappingTransformer.Arn
+      Type: Token
+      AmbiguousRoleResolution: Deny
+      IdentityProvider:
+        'Fn::Join':
+          - ':'
+          - - 'Fn::GetAtt':
+                - ContentAnalysisUserPool
+                - ProviderName
+            - Ref: ContentAnalysisWebAppClient
+
+  CognitoStandardAuthDefaultRole:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: F38
+            reason: "The wildcard is used for a deny action, not an allow action."
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Federated: "cognito-identity.amazonaws.com"
+            Action:
+              - "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals:
+                "cognito-identity.amazonaws.com:aud": !Ref ContentAnalysisIdentityPool
+              "ForAnyValue:StringEquals":
+                "cognito-identity.amazonaws.com:amr": authenticated
+      Policies:
+        - PolicyName: !Sub "${AWS::StackName}-AuthNoGroup"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action: "*"
+                Resource: "*"
+                Effect: "Deny"
+
+  CognitoStandardUnauthDefaultRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Federated: "cognito-identity.amazonaws.com"
+            Action:
+              - "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals:
+                "cognito-identity.amazonaws.com:aud": !Ref ContentAnalysisIdentityPool
+              "ForAnyValue:StringEquals":
+                "cognito-identity.amazonaws.com:amr": unauthenticated
+
+  ContentAnalysisIdentityPoolRoleMapping:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref ContentAnalysisIdentityPool
+      RoleMappings: !GetAtt TransformedRoleMapping.RoleMapping
+      Roles:
+        authenticated: !GetAtt CognitoStandardAuthDefaultRole.Arn
+        unauthenticated: !GetAtt CognitoStandardUnauthDefaultRole.Arn
+
+  ContentAnalysisAdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      Description: 'User group for AWS Content Analysis Admins'
+      RoleArn: !GetAtt ContentAnalysisAdminRole.Arn
+      UserPoolId: !Ref ContentAnalysisUserPool
+      GroupName: !Sub "${AWS::StackName}-Admins"
+
+  ContentAnalysisAdminAccount:
+    Type: AWS::Cognito::UserPoolUser
+    Properties:
+      DesiredDeliveryMediums:
+        - EMAIL
+      UserAttributes: [{"Name": "email", "Value": !Ref AdminEmail}]
+      Username: !Ref AdminEmail
+      UserPoolId: !Ref ContentAnalysisUserPool
+
+  # TODO: Need to add S3 put access to dataplane bucket on public/upload/*
+  ContentAnalysisAdminRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Federated: "cognito-identity.amazonaws.com"
+            Action:
+              - "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals:
+                "cognito-identity.amazonaws.com:aud": !Ref ContentAnalysisIdentityPool
+              "ForAnyValue:StringEquals":
+                "cognito-identity.amazonaws.com:amr": authenticated
+      Policies:
+        - PolicyName:  !Sub "${AWS::StackName}-AdminPolicy"
+          PolicyDocument: !Sub
+            - |-
+              {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Action": [
+                      "execute-api:Invoke"
+                    ],
+                    "Effect": "Allow",
+                    "Resource": ["arn:aws:execute-api:${region}:${account}:${wfapi}/*", "arn:aws:execute-api:${region}:${account}:${dataapi}/*"]
+                  },
+                  {
+                    "Action": [
+                      "s3:PutObject"
+                    ],
+                    "Effect": "Allow",
+                    "Resource": [
+                      "arn:aws:s3:::${dataplanebucket}/public/*"
+                    ]
+                  },
+                  {
+                    "Action": [
+                      "s3:ListBucket"
+                    ],
+                    "Effect": "Allow",
+                    "Resource": "arn:aws:s3:::${dataplanebucket}"
+                  },
+                  {
+                    "Action": [
+                      "es:*"
+                    ],
+                    "Effect": "Allow",
+                    "Resource": "${esdomain}/*"
+                  }
+                ]
+              }
+            - {
+              region: !Ref "AWS::Region",
+              account: !Ref "AWS::AccountId",
+              wfapi: !Ref WorkflowApiId,
+              dataapi: !Ref DataplaneApiId,
+              esdomain: !Ref ElasticDomainArn,
+              dataplanebucket: !Ref DataplaneBucket
+            }
+
+  AddAdminUserToAdminGroup:
+    DependsOn: ContentAnalysisAdminAccount
+    Type: AWS::Cognito::UserPoolUserToGroupAttachment
+    Properties:
+      GroupName: !Ref ContentAnalysisAdminGroup
+      Username: !Ref AdminEmail
+      UserPoolId: !Ref ContentAnalysisUserPool
+
+Outputs:
+  AdminRoleArn:
+    Value: !GetAtt ContentAnalysisAdminRole.Arn
+  UserPoolId:
+    Value: !Ref ContentAnalysisUserPool
+  IdentityPoolId:
+    Value: !Ref ContentAnalysisIdentityPool
+  UserPoolClientId:
+    Value: !Ref ContentAnalysisWebAppClient
