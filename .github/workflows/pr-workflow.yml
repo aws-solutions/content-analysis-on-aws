@@ -164,9 +164,9 @@ jobs:
         working-directory: /home/runner/work/
         run: |
           if [ -d ./aws-media-insights/ ]; then
-            cp -R ./aws-media-insights/aws-media-insights/test .
+            cp -R ./aws-media-insights/aws-media-insights/source/website/test .
           elif [ -d ./aws-content-analysis/ ]; then
-            cp -R ./aws-content-analysis/aws-content-analysis/test .
+            cp -R ./aws-content-analysis/aws-content-analysis/source/website/test .
           else
             echo "ERROR: Cannot find test files"
             exit 1
