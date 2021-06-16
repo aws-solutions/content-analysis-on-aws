@@ -57,7 +57,6 @@ cleanup() {
   if [[ "$VIRTUAL_ENV" != "" ]];
   then
     deactivate
-    #rm -rf "$VENV"
     echo "------------------------------------------------------------------------------"
     echo "Cleaning up complete"
     echo "------------------------------------------------------------------------------"
@@ -319,12 +318,30 @@ if [ "$global_bucket" != "solutions-reference" ] && [ "$global_bucket" != "solut
   echo "------------------------------------------------------------------------------"
   echo "Copy dist to S3"
   echo "------------------------------------------------------------------------------"
-
+  echo "Validating ownership of distribution buckets before copying deployment assets to them..."
+  # Get account id
+  account_id=$(aws sts get-caller-identity --query Account --output text)
+  if [ $? -ne 0 ]; then
+    msg "ERROR: Failed to get AWS account ID"
+    die 1
+  fi
+  # Validate ownership of $global_dist_dir
+  aws s3api head-bucket --bucket $global_bucket --expected-bucket-owner $account_id
+  if [ $? -ne 0 ]; then
+    msg "ERROR: Your AWS account does not own s3://$global_bucket/"
+    die 1
+  fi
+  # Validate ownership of ${regional_bucket}-${region}
+  aws s3api head-bucket --bucket ${regional_bucket}-${region} --expected-bucket-owner $account_id
+  if [ $? -ne 0 ]; then
+    msg "ERROR: Your AWS account does not own s3://${regional_bucket}-${region} "
+    die 1
+  fi
+  # Copy deployment assets to distribution buckets
   cd "$build_dir"/ || exit 1
   echo "Copying the prepared distribution to:"
   echo "s3://$global_bucket/aws-content-analysis/$version/"
   echo "s3://${regional_bucket}-${region}/aws-content-analysis/$version/"
-
   set -x
   aws s3 sync $global_dist_dir s3://$global_bucket/aws-content-analysis/$version/ $(if [ ! -z $profile ]; then echo "--profile $profile"; fi)
   aws s3 sync $regional_dist_dir s3://${regional_bucket}-${region}/aws-content-analysis/$version/ $(if [ ! -z $profile ]; then echo "--profile $profile"; fi)
