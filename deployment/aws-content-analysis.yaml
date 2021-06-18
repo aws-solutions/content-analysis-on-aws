@@ -29,6 +29,8 @@ Mappings:
     SourceCode:
       GlobalS3Bucket: "%%GLOBAL_BUCKET_NAME%%"
       TemplateKeyPrefix: "aws-content-analysis/%%VERSION%%"
+      RegionalS3Bucket: "%%REGIONAL_BUCKET_NAME%%"
+      CodeKeyPrefix: "aws-content-analysis/%%VERSION%%"
       Version: "%%VERSION%%"
   AnonymousData:
     SendAnonymousData:
@@ -234,8 +236,8 @@ Resources:
       Handler: anonymous-data-logger.handler
       Role: !GetAtt AnonymousDataCustomResourceRole.Arn
       Code:
-        S3Bucket: !Join [ "-", [ !FindInMap [ "SourceCode", "General", "RegionalS3Bucket" ], Ref: "AWS::Region" ] ]
-        S3Key: !Join [ "/", [ !FindInMap [ "SourceCode", "General", "CodeKeyPrefix" ], "anonymous-data-logger.zip" ] ]
+        S3Bucket: !Join [ "-", [ !FindInMap [ "ContentAnalysisApp", "SourceCode", "RegionalS3Bucket" ], Ref: "AWS::Region" ] ]
+        S3Key: !Join [ "/", [ !FindInMap [ "ContentAnalysisApp", "SourceCode", "CodeKeyPrefix" ], "anonymous-data-logger.zip" ] ]
       Runtime:  python3.8
       Timeout: 180
 
