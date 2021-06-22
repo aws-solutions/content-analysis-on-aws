@@ -24,7 +24,7 @@ Conditions:
 Mappings:
   MediaInsightsEngine:
     Release:
-      Version: "v2.0.5"
+      Version: "v3.0.0"
   ContentAnalysisApp:
     SourceCode:
       GlobalS3Bucket: "%%GLOBAL_BUCKET_NAME%%"
@@ -49,13 +49,14 @@ Resources:
             - MediaInsightsEngine
             - Release
             - Version
-          - "/media-insights-stack-opt-out.template"
+          - "/media-insights-stack.template"
       Parameters:
         DeployAnalyticsPipeline: Yes
         DeployTestResources: No
         MaxConcurrentWorkflows: 5
         EnableXrayTrace: Yes
         SendAnonymousData: !FindInMap [AnonymousData,SendAnonymousData,Data]
+        SolutionId: SO0042
 
   # Deploy Elasticsearch
 
