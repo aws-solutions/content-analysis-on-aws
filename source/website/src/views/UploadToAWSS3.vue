@@ -76,7 +76,7 @@
       <b-collapse id="collapse-2">
         <b-container class="text-left">
           <b-card-group deck>
-            <b-card header="Video Operators">
+            <b-card header="Vision Operators">
               <b-form-group>
                 <b-form-checkbox-group
                   id="checkbox-group-1"
