@@ -113,6 +113,7 @@ Resources:
         Variables:
           EsEndpoint: !GetAtt ESDomain.DomainEndpoint
           DataplaneBucket: !Ref MieDataplaneBucket
+          botoConfig: '{"user_agent_extra": "AwsSolution/SO0042/%%VERSION%%"}'
 
   # stream event mapping for lambda
 

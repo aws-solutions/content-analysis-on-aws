@@ -158,9 +158,8 @@ fi
 
 # Get reference for all important folders
 build_dir="$PWD"
+source_dir="$build_dir/../source"
 consumer_dir="$build_dir/../source/consumer"
-helper_dir="$build_dir/../source/helper"
-website_dir="$build_dir/../source/website/"
 global_dist_dir="$build_dir/global-s3-assets"
 regional_dist_dir="$build_dir/regional-s3-assets"
 
@@ -240,7 +239,7 @@ echo "Elasticsearch consumer Function"
 echo "------------------------------------------------------------------------------"
 
 echo "Building Elasticsearch Consumer function"
-cd "$consumer_dir" || exit 1
+cd "$source_dir/consumer" || exit 1
 
 [ -e dist ] && rm -r dist
 mkdir -p dist
@@ -270,7 +269,7 @@ echo "Build vue website"
 echo "------------------------------------------------------------------------------"
 
 echo "Building Vue.js website"
-cd "$website_dir/" || exit 1
+cd "$source_dir/website/" || exit 1
 echo "Installing node dependencies"
 npm install
 echo "Compiling the vue app"
@@ -297,19 +296,48 @@ echo "--------------------------------------------------------------------------
 cd $regional_dist_dir"/website/" || exit 1
 manifest=(`find . -type f | sed 's|^./||'`)
 manifest_json=$(IFS=,;printf "%s" "${manifest[*]}")
-echo "[\"$manifest_json\"]" | sed 's/,/","/g' > $helper_dir/webapp-manifest.json
-cat $helper_dir/webapp-manifest.json
+echo "[\"$manifest_json\"]" | sed 's/,/","/g' > "$source_dir/helper/webapp-manifest.json"
+cat "$source_dir/helper/webapp-manifest.json"
 
 echo "------------------------------------------------------------------------------"
 echo "Build website helper function"
 echo "------------------------------------------------------------------------------"
 
 echo "Building website helper function"
-cd "$helper_dir" || exit 1
+cd "$source_dir/helper" || exit 1
 [ -e dist ] && rm -r dist
 mkdir -p dist
 zip -q -g ./dist/websitehelper.zip ./website_helper.py webapp-manifest.json
 cp "./dist/websitehelper.zip" "$regional_dist_dir/websitehelper.zip"
+
+echo "------------------------------------------------------------------------------"
+echo "Creating deployment package for anonymous data logger"
+echo "------------------------------------------------------------------------------"
+
+echo "Building anonymous data logger"
+cd "$source_dir/anonymous-data-logger" || exit 1
+[ -e dist ] && rm -rf dist
+mkdir -p dist
+[ -e package ] && rm -rf package
+mkdir -p package
+echo "create requirements for lambda"
+# Make lambda package
+pushd package || exit 1
+echo "create lambda package"
+# Handle distutils install errors
+touch ./setup.cfg
+echo "[install]" > ./setup.cfg
+echo "prefix= " >> ./setup.cfg
+pip3 install --quiet -r ../requirements.txt --target .
+cp -R ../lib .
+if ! [ -d ../dist/anonymous-data-logger.zip ]; then
+  zip -q -r9 ../dist/anonymous-data-logger.zip .
+elif [ -d ../dist/anonymous-data-logger.zip ]; then
+  echo "Package already present"
+fi
+popd || exit 1
+zip -q -g ./dist/anonymous-data-logger.zip ./anonymous-data-logger.py
+cp "./dist/anonymous-data-logger.zip" "$regional_dist_dir/anonymous-data-logger.zip"
 
 # Skip copy dist to S3 if building for solution builder because
 # that pipeline takes care of copying the dist in another script.

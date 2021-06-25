@@ -7,11 +7,14 @@ import json
 import os
 import boto3
 from requests_aws4auth import AWS4Auth
+from botocore import config
 
 es_endpoint = os.environ['EsEndpoint']
 dataplane_bucket = os.environ['DataplaneBucket']
+boto_config = json.loads(os.environ['botoConfig'])
+config = config.Config(**boto_config)
 
-s3 = boto3.client('s3')
+s3 = boto3.client('s3', config=config)
 
 # These names are the lowercase version of OPERATOR_NAME defined in /source/operators/operator-library.yaml
 supported_operators = ["textdetection", "mediainfo", "transcribeaudio", "transcribevideo", "translate", "genericdatalookup", "labeldetection", "celebrityrecognition", "facesearch", "contentmoderation", "facedetection", "key_phrases", "entities", "shotdetection", "technicalcuedetection"]
