@@ -24,7 +24,7 @@ Conditions:
 Mappings:
   MediaInsightsEngine:
     Release:
-      Version: "v1.0.0"
+      Version: "v3.0.0"
   ContentAnalysisApp:
     SourceCode:
       GlobalS3Bucket: "%%GLOBAL_BUCKET_NAME%%"
@@ -44,7 +44,7 @@ Resources:
     Properties:
       TemplateURL: !Join
         - ""
-        - - "https://solutions-test-reference.s3.amazonaws.com/aws-media-insights-engine/"
+        - - "https://solutions-reference.s3.amazonaws.com/aws-media-insights-engine/"
           - !FindInMap
             - MediaInsightsEngine
             - Release
