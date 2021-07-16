@@ -6,7 +6,7 @@ This application is a demo reference application for the [Media Insights Engine]
 
 # INSTALLATION
 
-The following Cloudformation templates will deploy the Content Analysis front-end application with a prebuilt Media Insights Engine back-end.  
+The following Cloudformation templates will deploy the Content Analysis front-end application with a prebuilt Media Insights Engine back-end. **You must specify a Cloud Formation stack name that is 12 or fewer characters long**.
 
 Region| Launch
 ------|-----
