@@ -24,7 +24,7 @@ Conditions:
 Mappings:
   MediaInsightsEngine:
     Release:
-      Version: "v3.0.0"
+      Version: "v3.0.1"
   ContentAnalysisApp:
     SourceCode:
       GlobalS3Bucket: "%%GLOBAL_BUCKET_NAME%%"
