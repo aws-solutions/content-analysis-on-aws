@@ -6,7 +6,7 @@ This application is a demo reference application for the [Media Insights Engine]
 
 # INSTALLATION
 
-The following Cloudformation templates will deploy the Content Analysis front-end application with a prebuilt Media Insights Engine back-end.  
+The following Cloudformation templates will deploy the Content Analysis front-end application with a prebuilt Media Insights Engine back-end. **You must specify a Cloud Formation stack name that is 12 or fewer characters long**.
 
 Region| Launch
 ------|-----
@@ -150,7 +150,37 @@ The following Python code can be used in an AWS Lambda function to execute the v
 ## Starting workflows from an S3 trigger
 ***(Difficulty: 10 minutes)***
 
-Workflows can be started automatically when files are copied to a target S3 bucket by using the following 
+Workflows can be started automatically when files are copied to a designated S3 bucket by using the following procedure:
+
+1. Open the nested MieStack and click Update. 
+   
+   1. Select Update nested stack then click "Update stack".
+   2. Click "Use current template" then click Next
+   3. Write the S3 ARN in the `ExternalBucketArn` parameter which encompasses the objects you intend to process from your designated S3 bucket. For example, to allow MIE to process all the objects in a bucket named "sample_bucket", you could use `arn:aws:s3:::sample_bucket/*`.  
+   4. Click Next. 
+   5. Click Next, again. 
+   6. Acknowledge the two options under Capabilities, then click "Update stack".
+   
+2. Open the AWS Lambda console
+   
+   1. Click "Create function"
+   2. Provide a function name and select the latest Python runtime version
+   Copy and paste the code from [sigv4_post_sample.py](https://github.com/awslabs/aws-media-insights-engine/blob/development/docs/sigv4_post_sample.py) into a new Lambda function.
+   3. Under "Layers", click Add a layer
+   4. Select Custom layers, then select `media-insights-engine-python38` from the drop-down menu, and click Add.
+   5. Make the following code changes to the copied code:
+   
+- Put `import json` at the top
+- Replace `{restapi_id}` with the value of the `WorkflowApiRestID` key in the MieStack outputs
+- Replace `{region}` with the value of the region your stack is running in.
+- Replace `{api_name}` with `workflow`
+- Replace `{method_name}` with `execution`
+- Replace `{s3_bucket}` with the name of the S3 bucket you specified in `ExternalBucketArn`, above.
+- Replace `{s3_key}` with `event["Records"][0]["s3"]["object"]["key"]`
+- Replace `os.environ.get('AWS_ACCESS_KEY_ID')` with your AWS_ACCESS_KEY_ID
+- Replace `os.environ.get('AWS_SECRET_ACCESS_KEY')` with your AWS_SECRET_ACCESS_KEY
+   
+3. Setup an S3 trigger for the Lambda function, using the name of the S3 bucket you specified in `ExternalBucketArn`, above.
 
 ## Adding new operators and extending data stream consumers:
 ***(Difficulty: 60 minutes)***
