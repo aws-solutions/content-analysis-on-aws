@@ -217,6 +217,78 @@ Click Submit to save the new policy. After your domain is finished updating, cli
 
 Now you can use Kibana to validate that your operator's data is present in Elasticsearch. You can validate this by running a workflow where your operator is the only enabled operator, then searching for the asset_id produced by that workflow in Kibana.
 
+# Uninstall
+
+To uninstall the AWS Content Analysis solution, delete the CloudFormation stack, as described below. This will delete all the resources created for the Content Analysis solution except the `Dataplane` and the `DataplaneLogs` S3 buckets. These two buckets are retained when the solution stack is deleted in order to help prevent accidental data loss. You can use either the AWS Management Console or the AWS Command Line Interface (AWS CLI) to empty, then delete those S3 buckets after deleting the CloudFormation stack.
+
+### Option 1: Uninstall using the AWS Management Console
+1. Sign in to the AWS CloudFormation console.
+2. Select your AWS Content Analysis stack.
+3. Choose Delete.
+
+### Option 2: Uninstall using AWS Command Line Interface
+```
+aws cloudformation delete-stack --stack-name <installation-stack-name> --region <aws-region>
+```
+
+### Deleting Content Analysis S3 buckets
+AWS Content Analysis creates two S3 buckets that are not automatically deleted. To delete these buckets, use the steps below.
+
+1. Sign in to the Amazon S3 console.
+2. Select the `Dataplane` bucket.
+3. Choose Empty.
+4. Choose Delete.
+5. Select the `DataplaneLogsBucket` bucket.
+6. Choose Empty.
+7. Choose Delete.
+
+To delete an S3 bucket using AWS CLI, run the following command:
+```
+aws s3 rb s3://<bucket-name> --force
+```
+
+## Collection of operational metrics
+
+This solution includes an option to send anonymous operational metrics to AWS. Solution developers use this data to help improve the quality of the solution. When enabled, the following information is collected and sent to AWS:
+
+* **Solution ID:** the AWS solution ID (`SO0042`)
+* **Unique ID (UUID):** a randomly generated, unique identifier for each deployment
+* **Timestamp:** data-collection timestamp
+* **Version:** The version of the solution that was deployed
+* **CFTemplate:** The CloudFormation action that activated the metric report.
+
+Example data:
+
+```
+{
+    "Solution": "SO0042",
+    "UUID": "d84a0bd5-7483-494e-8ab1-fdfaa7e97687",
+    "TimeStamp": "2021-03-01T20:03:05.798545",
+    "Data": {
+        "Version": "v2.0.0",
+        "CFTemplate": "Created"
+    }
+}
+```
+
+To opt out of this reporting, set the `SendAnonymousData` parameter in the base Cloud Formation template [deployment/media-insights-stack.yaml](deployment/media-insights-stack.yaml) to a value of `false`.
+
+# Known Issues
+
+Visit the Issue page in this repository for known issues and feature requests.
+
+# Contributing
+
+See the [CONTRIBUTING](CONTRIBUTING.md) file for how to contribute.
+
+# License
+
+See the [LICENSE](LICENSE.txt) file for our project's licensing.
+
+Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+
+Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+
 # Help
 
 Join our Gitter chat at [https://gitter.im/awslabs/aws-media-insights-engine](https://gitter.im/awslabs/aws-media-insights-engine). This public chat forum was created to foster communication between MIE developers worldwide.
