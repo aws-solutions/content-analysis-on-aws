@@ -271,7 +271,21 @@ Example data:
 }
 ```
 
-To opt out of this reporting, set the `SendAnonymousData` parameter in the base Cloud Formation template [deployment/media-insights-stack.yaml](deployment/media-insights-stack.yaml) to a value of `false`.
+To opt out of this reporting, edit [deployment/aws-content-analysis.yaml](deployment/aws-content-analysis.yaml) and change `AnonymousUsage` in the `Mappings` section from:
+
+```
+"Send" : {
+"AnonymousUsage" : { "Data" : "Yes" }
+},
+```
+
+to:
+
+```
+"Send" : {
+"AnonymousUsage" : { "Data" : "No" }
+},
+```
 
 # Known Issues
 
