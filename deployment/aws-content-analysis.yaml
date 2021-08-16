@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "(SO0042) - aws-content-analysis. This is the base AWS CloudFormation template that provisions resources for the AWS Content Analysis solution."
+Description: "(SO0042) - aws-content-analysis %%VERSION%%. This is the base AWS CloudFormation template that provisions resources for the AWS Content Analysis solution."
 
 Parameters:
   AdminEmail:
@@ -57,6 +57,7 @@ Resources:
         EnableXrayTrace: Yes
         SendAnonymousData: !FindInMap [AnonymousData,SendAnonymousData,Data]
         SolutionId: SO0042
+        SolutionVersion: "%%VERSION%%"
 
   # Deploy Elasticsearch
 
