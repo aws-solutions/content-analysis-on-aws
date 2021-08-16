@@ -6,13 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0] - 2021-08-31
 
-- New feature: Increment backend implementation to MIE v3.0.1
+- New feature: Increment backend implementation to MIE v3.0.2
 - New feature: Decouple MIE from the content analysis code base. This leads to a greatly simplified code base for content analysis, and reduces the burden of upgrading.
 - New feature: Add configurations for automated code scanning tools, viperlight and cfn_nag.
 - New feature: Add GitHub action for automated build, deploy, and UI testing.
 - New feature: Allow users to control playback speed in the video player.
 - New feature: Allow users to enable encryption with custom KMS keys for Amazon Comprehend.
 - New feature: Include the cloud formation stack name in the invitation email
+- Bug fix: Fix Elasticsearch incompatibility error (#31)
 - Bug fix: Support filenames with multiple periods
 - Bug fix: Support text detection in images
 - Bug fix: Upgrade axios package to resolve security deficiency
