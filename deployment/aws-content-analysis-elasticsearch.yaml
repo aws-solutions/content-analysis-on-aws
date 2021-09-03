@@ -1,32 +1,22 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "(SO0042) - aws-content-analysis. Elasticsearch Consumer stack"
+Description: "(SO0042) - aws-content-analysis. Opensearch Consumer stack"
 
 Parameters:
-  DeployElasticsearch:
-    Type: String
-    Description: "Would you like to deploy an Elasticsearch cluster?"
-    Default: Yes
-    AllowedValues:
-      - Yes
-      - No
-  #  ESEndpoint:
-  #    Type: String
-  #    Description: "Enter your existing elastic endpoint if you choose not to have a cluster deployed for you"
   NodeType:
-    Description: "The node type to be provisioned for the Elasticsearch cluster"
+    Description: "The node type to be provisioned for the Opensearch cluster"
     Type: String
-    Default: "t3.small.elasticsearch"
+    Default: "t3.small.search"
     AllowedValues:
-      - "t3.small.elasticsearch"
-      - "m4.large.elasticsearch"
-      - "m4.xlarge.elasticsearch"
-      - "c4.large.elasticsearch"
-      - "c4.xlarge.elasticsearch"
-      - "r4.large.elasticsearch"
-      - "r4.xlarge.elasticsearch"
-    ConstraintDescription: "must be a valid Elasticsearch node type."
+      - "t3.small.search"
+      - "m4.large.search"
+      - "m4.xlarge.search"
+      - "c4.large.search"
+      - "c4.xlarge.search"
+      - "r4.large.search"
+      - "r4.xlarge.search"
+    ConstraintDescription: "must be a valid Opensearch node type."
   NodeCount:
-    Description: "The number of nodes in the Elasticsearch cluster."
+    Description: "The number of nodes in the Opensearch cluster."
     Type: Number
     Default: 2
   MieDataplaneBucket:
@@ -35,13 +25,10 @@ Parameters:
   ESConsumerCode:
     Type: String
     Default: "esconsumer.zip"
-    Description: "S3 Key of the elasticsearch consumer code"
+    Description: "S3 Key of the Opensearch consumer code"
   AnalyticsStreamArn:
     Description: "Arn of the MIE kinesis data stream"
     Type: String
-
-Conditions:
-  DeployESCluster: !Equals [!Ref DeployElasticsearch, Yes]
 
 Mappings:
   SourceCode:
@@ -50,7 +37,7 @@ Mappings:
       KeyPrefix: "aws-content-analysis/%%VERSION%%"
 
 Resources:
-  # elastic search cluster
+  # OpenSearch cluster
 
   # TODO: Best Practice - Resource found with an explicit name, this disallows updates that require replacement of this resource
 

@@ -5,18 +5,18 @@ Parameters:
   AdminEmail:
     Description: Email address of the Content Analysis Administrator
     Type: String
-  ElasticSearchNodeSize:
-    Description: "The node type to be provisioned for the Elasticsearch cluster"
+  OpenSearchNodeSize:
+    Description: "The node type to be provisioned for the Opensearch cluster"
     Type: String
-    Default: "t3.small.elasticsearch"
+    Default: "t3.small.search"
     AllowedValues:
-      - "t3.small.elasticsearch"
-      - "m4.large.elasticsearch"
-      - "m4.xlarge.elasticsearch"
-      - "c4.large.elasticsearch"
-      - "c4.xlarge.elasticsearch"
-      - "r4.large.elasticsearch"
-      - "r4.xlarge.elasticsearch"
+      - "t3.small.search"
+      - "m4.large.search"
+      - "m4.xlarge.search"
+      - "c4.large.search"
+      - "c4.xlarge.search"
+      - "r4.large.search"
+      - "r4.xlarge.search"
 
 Conditions:
   EnableAnonymousData: !Equals [ !FindInMap [AnonymousData,SendAnonymousData,Data], Yes]
@@ -79,7 +79,7 @@ Resources:
       Parameters:
         AnalyticsStreamArn: !GetAtt MieStack.Outputs.AnalyticsStreamArn
         MieDataplaneBucket: !GetAtt MieStack.Outputs.DataplaneBucket
-        NodeType: !Ref ElasticSearchNodeSize
+        NodeType: !Ref OpenSearchNodeSize
 
   # Deploy Auth stack
 
