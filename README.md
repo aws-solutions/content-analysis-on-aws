@@ -217,11 +217,18 @@ Click Submit to save the new policy. After your domain is finished updating, cli
 
 Now you can use Kibana to validate that your operator's data is present in Elasticsearch. You can validate this by running a workflow where your operator is the only enabled operator, then searching for the asset_id produced by that workflow in Kibana.
 
-# User Administration
 
-This solution uses AWS Cognito to manage user accounts for the web application. Cognito resources are configured by the [deployment/aws-content-analysis-auth.yaml](deployment/aws-content-analysis-auth.yaml) nested stack. An administration account will be configured in Cognito during the Cloud Formation deployment. A temporary password for the administration account will be sent to the email address specified in the corresponding Cloud Formation email parameter.  This administration account can be used to create new user accounts for the correspodning Cognito user pool. When users authenticate to the web application, Cognito will provide temporary credentials to the user's web session. These credentials can be used to authorize requests to the back-end APIs in API Gateway and Elasticsearch. 
+# User Authentication
 
-Follow this procedure to create new user accounts for the web application:
+This solution uses [Amazon Cognito](https://docs.aws.amazon.com/cognito/index.html) for user authentication. When a user logs into the web application, Cognito provides temporary tokens that front-end Javascript components use to authenticate to back-end APIs in API Gateway and Elasticsearch. To learn more about these tokens, see [Using Tokens with User Pools](https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-tokens-with-identity-providers.html) in the Amazon Cognito documentation.
+
+The front-end Javascript components in this application use the [Amplify Framework](https://docs.amplify.aws/) to perform back-end requests. You won't actually see any explicit handling of Cognito tokens in the source code for this application because that's all handled internally by the Amplify Framework. 
+
+## User account management
+
+All the necessary Cognito resources for this solution are configured in the [deployment/aws-content-analysis-auth.yaml](deployment/aws-content-analysis-auth.yaml) CloudFormation template and it includes an initial administration account. A temporary password for this account will be sent to the email address specified during the CloudFormation deployment. This administration account can be used to create additional user accounts for the application. 
+
+Follow this procedure to create new user accounts:
 
 1.	Sign in to the [Amazon Cognito console](https://console.aws.amazon.com/cognito/home).
 2.	Choose Manage User Pools.
@@ -238,7 +245,7 @@ Follow this procedure to create new user accounts for the web application:
 <img src="docs/images/create_user02.png" width=600>
 
 9.	On the Users page, choose Add to group.
-10.	In the Add user dialog box, access the drop-down list and select MieDevelopersGroup.
+10.	In the Add user dialog box, access the drop-down list and select the user group corresponding to your auth stack.
 
 <img src="docs/images/create_user03.png" width=400>
 
