@@ -72,9 +72,9 @@ Here are some sample searches:
 
 # Advanced Installation Options
 
-## Building the demo app from source code
+## Building the solution from source code
 
-The following commands will build the MIE demo application from source code. Be sure to define values for `EMAIL`, `WEBAPP_STACK_NAME`, and `REGION` first.
+The following commands will build the Content Analysis solution from source code. Be sure to define values for `EMAIL`, `WEBAPP_STACK_NAME`, and `REGION` first.
 
 ```
 EMAIL=[specify your email]
@@ -85,7 +85,7 @@ git clone https://github.com/awslabs/aws-content-analysis
 cd aws-content-analysis
 cd deployment
 DATETIME=$(date '+%s')
-DIST_OUTPUT_BUCKET=media-insights-engine-frontend-$DATETIME
+DIST_OUTPUT_BUCKET=aws-content-analysis-frontend-$DATETIME
 aws s3 mb s3://$DIST_OUTPUT_BUCKET-$REGION --region $REGION
 aws s3 mb s3://$TEMPLATE_OUTPUT_BUCKET --region $REGION
 ./build-s3-dist.sh --template-bucket ${TEMPLATE_OUTPUT_BUCKET} --code-bucket ${DIST_OUTPUT_BUCKET} --version ${VERSION} --region ${REGION}
@@ -93,7 +93,7 @@ aws s3 mb s3://$TEMPLATE_OUTPUT_BUCKET --region $REGION
 
 Once you have built the demo app with the above commands, then it's time to deploy it. You have two options, depending on whether you want to deploy over an existing MIE stack or a new one:
 
-#### *Option 1:* Install demo app over an existing MIE stack
+#### *Option 1:* Install AWS Content Analysis over an existing MIE stack
 
 Use these commands to deploy the demo app over an existing MIE stack:
 
@@ -103,7 +103,7 @@ TEMPLATE=[copy "With existing MIE deployment" link from output of build script]
 aws cloudformation create-stack --stack-name $WEBAPP_STACK_NAME --template-url $TEMPLATE --region $REGION --parameters ParameterKey=MieStackName,ParameterValue=$MIE_STACK_NAME ParameterKey=AdminEmail,ParameterValue=$EMAIL --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --profile default --disable-rollback
 ```
 
-#### *Option 2:* Install MIE framework AND demo app
+#### *Option 2:* Install AWS Content Analysis with a new MIE stack
 
 Use these commands to deploy the demo app over a new MIE stack:
 
@@ -142,9 +142,9 @@ awscurl -X POST --region us-west-2 --data '{"Name":"CasImageWorkflow", "Input":{
 ## Starting workflows from a Python Lambda function
 ***(Difficulty: 10 minutes)***
 
-The following Python code can be used in an AWS Lambda function to execute the video analysis workflow:
+The following Python code can be used in an AWS Lambda function to execute the image analysis workflow:
 
-
+* [sigv4_post_sample.py](https://github.com/awslabs/aws-media-insights-engine/blob/development/docs/sigv4_post_sample.py)
 
 
 ## Starting workflows from an S3 trigger
@@ -216,6 +216,33 @@ Click Submit to save the new policy. After your domain is finished updating, cli
 <img src="docs/images/kibana-create-index.png" width=600>
 
 Now you can use Kibana to validate that your operator's data is present in Elasticsearch. You can validate this by running a workflow where your operator is the only enabled operator, then searching for the asset_id produced by that workflow in Kibana.
+
+# User Administration
+
+This solution uses AWS Cognito to manage user accounts for the web application. Cognito resources are configured by the [deployment/aws-content-analysis-auth.yaml](deployment/aws-content-analysis-auth.yaml) nested stack. An administration account will be configured in Cognito during the Cloud Formation deployment. A temporary password for the administration account will be sent to the email address specified in the corresponding Cloud Formation email parameter.  This administration account can be used to create new user accounts for the correspodning Cognito user pool. When users authenticate to the web application, Cognito will provide temporary credentials to the user's web session. These credentials can be used to authorize requests to the back-end APIs in API Gateway and Elasticsearch. 
+
+Follow this procedure to create new user accounts for the web application:
+
+1.	Sign in to the [Amazon Cognito console](https://console.aws.amazon.com/cognito/home).
+2.	Choose Manage User Pools.
+3.	In the User Pools page, select the user pool for your stack.
+4.	From the left navigation pane, choose Users and Groups.
+5.	On the Users tab, choose Create user.
+
+<img src="docs/images/create_user01.png" width=600>
+
+6.	In the Create user dialog box, enter a username and temporary password.
+7.	Choose Create user.
+8.	On the User Pool page, under the Username column, select the user you just created.
+
+<img src="docs/images/create_user02.png" width=600>
+
+9.	On the Users page, choose Add to group.
+10.	In the Add user dialog box, access the drop-down list and select MieDevelopersGroup.
+
+<img src="docs/images/create_user03.png" width=400>
+
+The new user will now be able to use the web application.
 
 # Uninstall
 
