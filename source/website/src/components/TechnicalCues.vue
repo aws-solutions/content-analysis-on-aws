@@ -20,7 +20,7 @@
         :sort-by="sortBy"
       >
         <template #cell(Type)="data">
-          <b-button variant="link" @click="setPlayerTime(data.item.EndTimestamp, data.item.StartTimestamp)"> 
+          <b-button variant="link" @click="setPlayerTime(data.item.EndTimestamp, data.item.StartTimestamp)">
             {{ data.item.Type }}
           </b-button>
         </template>
@@ -38,6 +38,29 @@
       >
         Download Data
       </b-button>
+      <br>
+      <b-button
+          :pressed="false"
+          size="sm"
+          variant="link"
+          class="text-decoration-none"
+          @click="showElasticsearchApiRequest = true"
+      >
+        Show API request to get these results
+      </b-button>
+      <b-modal
+          v-model="showElasticsearchApiRequest"
+          scrollable
+          title="SEARCH API"
+          ok-only
+      >
+        <label>Request URL:</label>
+        <pre v-highlightjs><code class="bash">GET {{ ELASTICSEARCH_ENDPOINT }}workflow/execution</code></pre>
+        <label>Search query:</label>
+        <pre v-highlightjs="JSON.stringify(searchQuery)"><code class="json"></code></pre>
+        <label>Sample command:</label>
+        <pre v-highlightjs="curlCommand"><code class="bash"></code></pre>
+      </b-modal>
     </div>
   </div>
 </template>
@@ -58,6 +81,9 @@
     },
     data() {
       return {
+        curlCommand: '',
+        searchQuery: '',
+        showElasticsearchApiRequest: false,
         sortBy: 'StartTimecodeSMPTE',
         currentPage: 1,
         perPage: 5,
@@ -76,13 +102,13 @@
             }
           },
           {
-            'EndTimecodeSMPTE': { 
+            'EndTimecodeSMPTE': {
               label: 'End',
               sortable: false
               }
           },
           {
-            'DurationSMPTE': { 
+            'DurationSMPTE': {
               label: 'Duration',
               sortable: true
               }
@@ -111,6 +137,9 @@
         }
       }
     },
+    mounted: function() {
+      this.getCurlCommand();
+    },
     beforeDestroy: function () {
       this.elasticsearch_data = [];
     },
@@ -122,6 +151,11 @@
       this.fetchAssetData();
     },
     methods: {
+      getCurlCommand() {
+        this.searchQuery = 'AssetId:'+this.$route.params.asset_id+' Confidence:>'+this.Confidence+' Operator:'+this.operator;
+        // get curl command to search elasticsearch
+        this.curlCommand = 'awscurl -X GET --profile default --service es --region ' + this.AWS_REGION + ' \'' + this.ELASTICSEARCH_ENDPOINT + '/_search?q=' + encodeURIComponent(this.searchQuery) + '\''
+      },
       setPlayerTime(endMillisenconds, startMilliseconds) {
         this.endTimestamp = endMillisenconds / 1000
         let seconds = startMilliseconds / 1000
@@ -145,7 +179,7 @@
           let path = '/_search';
           let apiParams = {
             headers: {'Content-Type': 'application/json'},
-            queryStringParameters: {'q': query, 'default_operator': 'AND', 'size': 10000}
+            queryStringParameters: {'q': this.searchQuery, 'default_operator': 'AND', 'size': 10000}
           };
           let response = await this.$Amplify.API.get(apiName, path, apiParams);
           console.log(response)
