@@ -159,7 +159,7 @@
         this.player.play();
       },
       getCurlCommand() {
-        this.searchQuery = 'AssetId:'+this.$route.params.asset_id+' Confidence:>'+this.Confidence+' Operator:'+this.operator;
+        this.searchQuery = 'AssetId:'+this.$route.params.asset_id+' Operator:'+this.operator;
         // get curl command to search elasticsearch
         this.curlCommand = 'awscurl -X GET --profile default --service es --region ' + this.AWS_REGION + ' \'' + this.ELASTICSEARCH_ENDPOINT + '/_search?q=' + encodeURIComponent(this.searchQuery) + '\''
       },
