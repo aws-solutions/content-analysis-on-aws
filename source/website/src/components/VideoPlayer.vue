@@ -77,8 +77,9 @@ export default {
         },
         markers: []
       });
-      // this.player.autoplay('muted');
-      this.player.currentTime(0);
+      // Set player time to 2 second mark in order to avoid a black poster image for
+      // videos that begin with a fade from black.
+      this.player.currentTime(2);
       let vm = this
       this.player.on('timeupdate', function() {
         let currentTime = this.currentTime()
