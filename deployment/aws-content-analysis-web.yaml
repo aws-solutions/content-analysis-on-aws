@@ -130,7 +130,7 @@ Resources:
             Resource: !Sub "arn:aws:s3:::${ContentAnalysisWebsiteBucket}/*"
             Condition:
               Bool:
-                aws:SecureTransport: true
+                aws:SecureTransport: false
 
   CopyWebSource:
     DependsOn: ContentAnalysisWebsiteBucket
