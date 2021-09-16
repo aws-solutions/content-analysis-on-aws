@@ -127,7 +127,9 @@ Resources:
           - Effect: Deny
             Principal: "*"
             Action: "*"
-            Resource: !Sub "arn:aws:s3:::${ContentAnalysisWebsiteBucket}/*"
+            Resource: 
+              - !Sub "arn:aws:s3:::${ContentAnalysisWebsiteBucket}/*"
+              - !Sub "arn:aws:s3:::${ContentAnalysisWebsiteBucket}"
             Condition:
               Bool:
                 aws:SecureTransport: false
