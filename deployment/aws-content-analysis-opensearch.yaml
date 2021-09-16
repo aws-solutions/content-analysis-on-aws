@@ -22,10 +22,6 @@ Parameters:
   MieDataplaneBucket:
     Type: String
     Description: "Name of the dataplane bucket"
-  ESConsumerCode:
-    Type: String
-    Default: "esconsumer.zip"
-    Description: "S3 Key of the Opensearch consumer code"
   AnalyticsStreamArn:
     Description: "Arn of the MIE kinesis data stream"
     Type: String
@@ -37,12 +33,12 @@ Mappings:
       KeyPrefix: "aws-content-analysis/%%VERSION%%"
 
 Resources:
-  # OpenSearch cluster
+  # Opensearch cluster
 
   # TODO: Best Practice - Resource found with an explicit name, this disallows updates that require replacement of this resource
 
-  ESDomain:
-    Type: "AWS::Elasticsearch::Domain"
+  OpensearchServiceDomain:
+    Type: "AWS::OpenSearchService::Domain"
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -58,20 +54,20 @@ Resources:
         Enabled: true
       NodeToNodeEncryptionOptions:
         Enabled: true
-      ElasticsearchClusterConfig:
+      ClusterConfig:
         DedicatedMasterEnabled: false
         InstanceCount:
           !Ref NodeCount
         ZoneAwarenessEnabled: false
         InstanceType:
           !Ref NodeType
-      ElasticsearchVersion: 7.10
+      EngineVersion: Elasticsearch_7.10
       SnapshotOptions:
         AutomatedSnapshotStartHour: 0
 
-  # elastic search consumer lambda
+  # open search consumer lambda
 
-  ElasticsearchConsumerLambda:
+  OpensearchConsumerLambda:
     Type: "AWS::Lambda::Function"
     Metadata:
       cfn_nag:
@@ -82,7 +78,7 @@ Resources:
             reason: "This function does not performance optimization, so the default concurrency limits suffice."
     Properties:
       Handler: "lambda_handler.lambda_handler"
-      Role: !GetAtt ElasticConsumerRole.Arn
+      Role: !GetAtt StreamConsumerRole.Arn
       Code:
         S3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "RegionalS3Bucket"], Ref: "AWS::Region"]]
         S3Key:
@@ -98,7 +94,7 @@ Resources:
       MemorySize: 2048
       Environment:
         Variables:
-          EsEndpoint: !GetAtt ESDomain.DomainEndpoint
+          EsEndpoint: !GetAtt OpensearchServiceDomain.DomainEndpoint
           DataplaneBucket: !Ref MieDataplaneBucket
           botoConfig: '{"user_agent_extra": "AwsSolution/SO0042/%%VERSION%%"}'
 
@@ -109,13 +105,13 @@ Resources:
     Properties:
       Enabled: true
       EventSourceArn: !Ref AnalyticsStreamArn
-      FunctionName: !GetAtt ElasticsearchConsumerLambda.Arn
+      FunctionName: !GetAtt OpensearchConsumerLambda.Arn
       StartingPosition: "LATEST"
 
   # IAM
 
-  # TODO: Need to clean up this policy with regards to elasticsearch access
-  ElasticConsumerRole:
+  # TODO: Need to clean up this policy with regards to opensearch access
+  StreamConsumerRole:
     Type: "AWS::IAM::Role"
     Metadata:
       cfn_nag:
@@ -154,20 +150,20 @@ Resources:
                   - "es:ESHttpPut"
                   - "es:ESHttpDelete"
                   - "es:ESHttpGet"
-                Resource: !Join ["", [!GetAtt ESDomain.DomainArn, "/*"]]
+                Resource: !Join ["", [!GetAtt OpensearchServiceDomain.Arn, "/*"]]
               - Effect: Allow
                 Action:
-                  - "es:DescribeElasticsearchDomain"
-                  - "es:GetCompatibleElasticsearchVersions"
-                  - "es:DescribeElasticsearchDomains"
-                Resource: !GetAtt ESDomain.DomainArn
+                  - "es:DescribeOpensearchDomain"
+                  - "es:GetCompatibleOpensearchVersions"
+                  - "es:DescribeOpensearchDomains"
+                Resource: !GetAtt OpensearchServiceDomain.Arn
               - Effect: Allow
                 Action:
                   - "s3:GetObject"
                   - "s3:PutObject"
                 Resource: !Sub "arn:aws:s3:::${MieDataplaneBucket}/*"
 Outputs:
-  ElasticEndpoint:
-    Value: !GetAtt ESDomain.DomainEndpoint
+  DomainEndpoint:
+    Value: !GetAtt OpensearchServiceDomain.DomainEndpoint
   DomainArn:
-    Value: !GetAtt ESDomain.DomainArn
+    Value: !GetAtt OpensearchServiceDomain.Arn

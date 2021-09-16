@@ -36,7 +36,7 @@ getRuntimeConfig().then(function(json) {
       endpoints: [
         {
           name: "contentAnalysisElasticsearch",
-          endpoint: json.ELASTICSEARCH_ENDPOINT,
+          endpoint: json.SEARCH_ENDPOINT,
           service: "es",
           region: json.AWS_REGION
         },
@@ -62,7 +62,7 @@ getRuntimeConfig().then(function(json) {
     data() {
       return {
         // Distribute runtime configs into every Vue component
-        ELASTICSEARCH_ENDPOINT: json.ELASTICSEARCH_ENDPOINT,
+        SEARCH_ENDPOINT: json.SEARCH_ENDPOINT,
         DATAPLANE_API_ENDPOINT: json.DATAPLANE_API_ENDPOINT,
         DATAPLANE_BUCKET: json.DATAPLANE_BUCKET,
         WORKFLOW_API_ENDPOINT: json.WORKFLOW_API_ENDPOINT,

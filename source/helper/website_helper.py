@@ -9,15 +9,11 @@
 #
 ###############################################################################
 
-
-
-
 import boto3
 import json
 import logging
 import os
 from urllib.request import build_opener, HTTPHandler, Request
-
 
 LOGGER = logging.getLogger()
 LOGGER.setLevel(logging.INFO)
@@ -95,7 +91,7 @@ def copy_source(event, context):
             LOGGER.info("Checking if custom environment variables are present")
 
             try:
-                elastic = 'https://'+os.environ['ElasticEndpoint']
+                search = 'https://'+os.environ['SearchEndpoint']
                 dataplane = os.environ['DataplaneEndpoint']
                 workflow = os.environ['WorkflowEndpoint']
                 dataplane_bucket = os.environ['DataplaneBucket']
@@ -106,7 +102,7 @@ def copy_source(event, context):
             except KeyError:
                 replace_env_variables = False
             else:
-                new_variables = {"ELASTICSEARCH_ENDPOINT": elastic, "WORKFLOW_API_ENDPOINT": workflow,
+                new_variables = {"SEARCH_ENDPOINT": search, "WORKFLOW_API_ENDPOINT": workflow,
                                  "DATAPLANE_API_ENDPOINT": dataplane, "DATAPLANE_BUCKET": dataplane_bucket, "AWS_REGION": region,
                                  "USER_POOL_ID": user_pool_id, "USER_POOL_CLIENT_ID": client_id, "IDENTITY_POOL_ID": identity_id}
                 replace_env_variables = True

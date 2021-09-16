@@ -8,18 +8,18 @@ Parameters:
   AdminEmail:
     Description: Email address of the Content Analysis Administrator
     Type: String
-  ElasticSearchNodeSize:
-    Description: "The node type to be provisioned for the Elasticsearch cluster"
+  OpensearchNodeSize:
+    Description: "The node type to be provisioned for the Opensearch cluster"
     Type: String
-    Default: "t3.small.elasticsearch"
+    Default: "t3.small.search"
     AllowedValues:
-      - "t3.small.elasticsearch"
-      - "m4.large.elasticsearch"
-      - "m4.xlarge.elasticsearch"
-      - "c4.large.elasticsearch"
-      - "c4.xlarge.elasticsearch"
-      - "r4.large.elasticsearch"
-      - "r4.xlarge.elasticsearch"
+      - "t3.small.search"
+      - "m4.large.search"
+      - "m4.xlarge.search"
+      - "c4.large.search"
+      - "c4.xlarge.search"
+      - "r4.large.search"
+      - "r4.xlarge.search"
 
 Mappings:
   ContentAnalysisApp:
@@ -29,8 +29,8 @@ Mappings:
 
 Resources:
 
-  # Deploy Elasticsearch
-  ContentAnalysisElasticsearchStack:
+  # Deploy Opensearch
+  OpensearchStack:
     Type: "AWS::CloudFormation::Stack"
     Properties:
       TemplateURL: !Join
@@ -45,7 +45,7 @@ Resources:
             - ContentAnalysisApp
             - SourceCode
             - TemplateKeyPrefix
-          - "/aws-content-analysis-elasticsearch.template"
+          - "/aws-content-analysis-opensearch.template"
       Parameters:
         AnalyticsStreamArn:
           Fn::ImportValue:
@@ -53,7 +53,7 @@ Resources:
         MieDataplaneBucket:
           Fn::ImportValue:
             !Sub "${MieStackName}:DataplaneBucket"
-        NodeType: !Ref ElasticSearchNodeSize
+        NodeType: !Ref OpensearchNodeSize
 
   # Deploy Auth stack
 
@@ -81,7 +81,7 @@ Resources:
         DataplaneApiId:
           Fn::ImportValue:
             !Sub "${MieStackName}:DataplaneApiId"
-        ElasticDomainArn: !GetAtt ContentAnalysisElasticsearchStack.Outputs.DomainArn
+        SearchDomainArn: !GetAtt OpensearchStack.Outputs.DomainArn
         DataplaneBucket:
           Fn::ImportValue:
             !Sub "${MieStackName}:DataplaneBucket"
@@ -160,7 +160,7 @@ Resources:
         WorkflowEndpoint:
           Fn::ImportValue:
             !Sub "${MieStackName}:WorkflowApiEndpoint"
-        ElasticEndpoint: !GetAtt ContentAnalysisElasticsearchStack.Outputs.ElasticEndpoint
+        SearchEndpoint: !GetAtt OpensearchStack.Outputs.DomainEndpoint
         DataplaneBucket:
           Fn::ImportValue:
             !Sub "${MieStackName}:DataplaneBucket"
@@ -169,10 +169,10 @@ Resources:
         PoolClientId: !GetAtt ContentAnalysisAuthStack.Outputs.UserPoolClientId
 
 Outputs:
-  CloudfrontUrl:
+  ContentAnalyisSolution:
     Value: !GetAtt ContentAnalysisWebStack.Outputs.CloudfrontUrl
-  ElasticEndpoint:
-    Value: !GetAtt ContentAnalysisElasticsearchStack.Outputs.ElasticEndpoint
+  SearchEndpoint:
+    Value: !GetAtt OpensearchStack.Outputs.DomainEndpoint
   UserPoolId:
     Value: !GetAtt ContentAnalysisAuthStack.Outputs.UserPoolId
   IdentityPoolId:
