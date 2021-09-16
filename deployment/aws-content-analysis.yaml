@@ -127,7 +127,7 @@ Resources:
       Parameters:
         DataplaneEndpoint: !GetAtt MieStack.Outputs.DataplaneApiEndpoint
         WorkflowEndpoint: !GetAtt MieStack.Outputs.WorkflowApiEndpoint
-        SearchEndpoint: !GetAtt OpensearchStack.Outputs.OpensearchEndpoint
+        SearchEndpoint: !GetAtt OpensearchStack.Outputs.DomainEndpoint
         DataplaneBucket: !GetAtt MieStack.Outputs.DataplaneBucket
         UserPoolId: !GetAtt AuthStack.Outputs.UserPoolId
         IdentityPoolId: !GetAtt AuthStack.Outputs.IdentityPoolId
