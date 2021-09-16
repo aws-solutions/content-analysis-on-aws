@@ -11,8 +11,8 @@ Parameters:
   DataplaneApiId:
     Description: REST API ID of the MIE Dataplane API
     Type: String
-  ElasticDomainArn:
-    Description: ARN of the Content Analysis ES Domain
+  SearchDomainArn:
+    Description: ARN of the Content Analysis Opensearch Domain
     Type: String
   DataplaneBucket:
     Description: Name of the MIE dataplane bucket
@@ -269,10 +269,11 @@ Resources:
                   },
                   {
                     "Action": [
-                      "es:*"
+                      "es:ESHttpPost",
+                      "es:ESHttpGet"
                     ],
                     "Effect": "Allow",
-                    "Resource": "${esdomain}/*"
+                    "Resource": "${searchdomain}/*"
                   }
                 ]
               }
@@ -281,7 +282,7 @@ Resources:
               account: !Ref "AWS::AccountId",
               wfapi: !Ref WorkflowApiId,
               dataapi: !Ref DataplaneApiId,
-              esdomain: !Ref ElasticDomainArn,
+              searchdomain: !Ref SearchDomainArn,
               dataplanebucket: !Ref DataplaneBucket
             }
 

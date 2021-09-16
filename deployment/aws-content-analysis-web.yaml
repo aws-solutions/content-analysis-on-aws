@@ -6,7 +6,7 @@ Parameters:
     Type: String
   WorkflowEndpoint:
     Type: String
-  ElasticEndpoint:
+  SearchEndpoint:
     Type: String
   DataplaneBucket:
     Type: String
@@ -167,7 +167,7 @@ Resources:
             Principal:
               CanonicalUser: !GetAtt ContentAnalysisOriginAccessIdentity.S3CanonicalUserId
 
-  ContentAnalysisWebsiteDistribution:
+  WebsiteDistribution:
     Type: AWS::CloudFront::Distribution
     Metadata:
       cfn_nag:
@@ -294,7 +294,7 @@ Resources:
         Variables:
           DataplaneEndpoint: !Ref DataplaneEndpoint
           WorkflowEndpoint: !Ref WorkflowEndpoint
-          ElasticEndpoint: !Ref ElasticEndpoint
+          SearchEndpoint: !Ref SearchEndpoint
           DataplaneBucket: !Ref DataplaneBucket
           UserPoolId: !Ref UserPoolId
           IdentityPoolId: !Ref IdentityPoolId
@@ -303,5 +303,5 @@ Resources:
 
 Outputs:
   CloudfrontUrl:
-    Value: !Join ["", ["https://", !GetAtt ContentAnalysisWebsiteDistribution.DomainName]]
+    Value: !Join ["", ["https://", !GetAtt WebsiteDistribution.DomainName]]
 

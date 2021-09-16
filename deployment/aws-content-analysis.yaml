@@ -3,20 +3,20 @@ Description: "(SO0042) - aws-content-analysis %%VERSION%%. This is the base AWS 
 
 Parameters:
   AdminEmail:
-    Description: Email address of the Content Analysis Administrator
+    Description: "Email address of the AWS Content Analysis administrator"
     Type: String
-  ElasticSearchNodeSize:
-    Description: "The node type to be provisioned for the Elasticsearch cluster"
+  OpensearchNodeSize:
+    Description: "The node type to be provisioned for the Opensearch cluster"
     Type: String
-    Default: "t3.small.elasticsearch"
+    Default: "t3.small.search"
     AllowedValues:
-      - "t3.small.elasticsearch"
-      - "m4.large.elasticsearch"
-      - "m4.xlarge.elasticsearch"
-      - "c4.large.elasticsearch"
-      - "c4.xlarge.elasticsearch"
-      - "r4.large.elasticsearch"
-      - "r4.xlarge.elasticsearch"
+      - "t3.small.search"
+      - "m4.large.search"
+      - "m4.xlarge.search"
+      - "c4.large.search"
+      - "c4.xlarge.search"
+      - "r4.large.search"
+      - "r4.xlarge.search"
 
 Conditions:
   EnableAnonymousData: !Equals [ !FindInMap [AnonymousData,SendAnonymousData,Data], Yes]
@@ -25,7 +25,7 @@ Mappings:
   MediaInsightsEngine:
     Release:
       Version: "v3.0.2"
-  ContentAnalysisApp:
+  Application:
     SourceCode:
       GlobalS3Bucket: "%%GLOBAL_BUCKET_NAME%%"
       TemplateKeyPrefix: "aws-content-analysis/%%VERSION%%"
@@ -59,44 +59,44 @@ Resources:
         SolutionId: SO0042
         SolutionVersion: "%%VERSION%%"
 
-  # Deploy Elasticsearch
+  # Deploy Opensearch
 
-  ContentAnalysisElasticsearchStack:
+  OpensearchStack:
     Type: "AWS::CloudFormation::Stack"
     Properties:
       TemplateURL: !Join
         - ""
         - - "https://"
           - !FindInMap
-            - ContentAnalysisApp
+            - Application
             - SourceCode
             - GlobalS3Bucket
           - ".s3.amazonaws.com/"
           - !FindInMap
-            - ContentAnalysisApp
+            - Application
             - SourceCode
             - TemplateKeyPrefix
-          - "/aws-content-analysis-elasticsearch.template"
+          - "/aws-content-analysis-opensearch.template"
       Parameters:
         AnalyticsStreamArn: !GetAtt MieStack.Outputs.AnalyticsStreamArn
         MieDataplaneBucket: !GetAtt MieStack.Outputs.DataplaneBucket
-        NodeType: !Ref ElasticSearchNodeSize
+        NodeType: !Ref OpensearchNodeSize
 
   # Deploy Auth stack
 
-  ContentAnalysisAuthStack:
+  AuthStack:
     Type: "AWS::CloudFormation::Stack"
     Properties:
       TemplateURL: !Join
         - ""
         - - "https://"
           - !FindInMap
-            - ContentAnalysisApp
+            - Application
             - SourceCode
             - GlobalS3Bucket
           - ".s3.amazonaws.com/"
           - !FindInMap
-            - ContentAnalysisApp
+            - Application
             - SourceCode
             - TemplateKeyPrefix
           - "/aws-content-analysis-auth.template"
@@ -104,34 +104,34 @@ Resources:
         AdminEmail: !Ref AdminEmail
         WorkflowApiId: !GetAtt MieStack.Outputs.WorkflowApiRestID
         DataplaneApiId: !GetAtt MieStack.Outputs.DataplaneApiRestID
-        ElasticDomainArn: !GetAtt ContentAnalysisElasticsearchStack.Outputs.DomainArn
+        SearchDomainArn: !GetAtt OpensearchStack.Outputs.DomainArn
         DataplaneBucket: !GetAtt MieStack.Outputs.DataplaneBucket
         ParentStackName: !Ref MieStack
 
-  ContentAnalysisWebStack:
+  WebStack:
     Type: "AWS::CloudFormation::Stack"
     Properties:
       TemplateURL: !Join
         - ""
         - - "https://"
           - !FindInMap
-            - ContentAnalysisApp
+            - Application
             - SourceCode
             - GlobalS3Bucket
           - ".s3.amazonaws.com/"
           - !FindInMap
-            - ContentAnalysisApp
+            - Application
             - SourceCode
             - TemplateKeyPrefix
           - "/aws-content-analysis-web.template"
       Parameters:
         DataplaneEndpoint: !GetAtt MieStack.Outputs.DataplaneApiEndpoint
         WorkflowEndpoint: !GetAtt MieStack.Outputs.WorkflowApiEndpoint
-        ElasticEndpoint: !GetAtt ContentAnalysisElasticsearchStack.Outputs.ElasticEndpoint
+        SearchEndpoint: !GetAtt OpensearchStack.Outputs.DomainEndpoint
         DataplaneBucket: !GetAtt MieStack.Outputs.DataplaneBucket
-        UserPoolId: !GetAtt ContentAnalysisAuthStack.Outputs.UserPoolId
-        IdentityPoolId: !GetAtt ContentAnalysisAuthStack.Outputs.IdentityPoolId
-        PoolClientId: !GetAtt ContentAnalysisAuthStack.Outputs.UserPoolClientId
+        UserPoolId: !GetAtt AuthStack.Outputs.UserPoolId
+        IdentityPoolId: !GetAtt AuthStack.Outputs.IdentityPoolId
+        PoolClientId: !GetAtt AuthStack.Outputs.UserPoolClientId
 
   # Deploy video workflow
 
@@ -142,12 +142,12 @@ Resources:
         - ""
         - - "https://"
           - !FindInMap
-            - ContentAnalysisApp
+            - Application
             - SourceCode
             - GlobalS3Bucket
           - ".s3.amazonaws.com/"
           - !FindInMap
-            - ContentAnalysisApp
+            - Application
             - SourceCode
             - TemplateKeyPrefix
           - "/aws-content-analysis-video-workflow.template"
@@ -170,12 +170,12 @@ Resources:
         - ""
         - - "https://"
           - !FindInMap
-            - ContentAnalysisApp
+            - Application
             - SourceCode
             - GlobalS3Bucket
           - ".s3.amazonaws.com/"
           - !FindInMap
-            - ContentAnalysisApp
+            - Application
             - SourceCode
             - TemplateKeyPrefix
           - "/aws-content-analysis-image-workflow.template"
@@ -238,8 +238,8 @@ Resources:
       Handler: anonymous-data-logger.handler
       Role: !GetAtt AnonymousDataCustomResourceRole.Arn
       Code:
-        S3Bucket: !Join [ "-", [ !FindInMap [ "ContentAnalysisApp", "SourceCode", "RegionalS3Bucket" ], Ref: "AWS::Region" ] ]
-        S3Key: !Join [ "/", [ !FindInMap [ "ContentAnalysisApp", "SourceCode", "CodeKeyPrefix" ], "anonymous-data-logger.zip" ] ]
+        S3Bucket: !Join [ "-", [ !FindInMap [ "Application", "SourceCode", "RegionalS3Bucket" ], Ref: "AWS::Region" ] ]
+        S3Key: !Join [ "/", [ !FindInMap [ "Application", "SourceCode", "CodeKeyPrefix" ], "anonymous-data-logger.zip" ] ]
       Runtime:  python3.8
       Timeout: 180
 
@@ -259,8 +259,8 @@ Resources:
       Resource: AnonymousMetric
       SolutionId: "SO0042"
       UUID: !GetAtt AnonymousDataUuid.UUID
-      Version: !FindInMap ["ContentAnalysisApp", "SourceCode", "Version"]
+      Version: !FindInMap ["Application", "SourceCode", "Version"]
 
 Outputs:
   ContentAnalyisSolution:
-    Value: !GetAtt ContentAnalysisWebStack.Outputs.CloudfrontUrl
+    Value: !GetAtt WebStack.Outputs.CloudfrontUrl

@@ -203,7 +203,7 @@ echo "--------------------------------------------------------------------------
 echo ""
 echo "Preparing template files:"
 cp "$build_dir/aws-content-analysis.yaml" "$global_dist_dir/aws-content-analysis.template"
-cp "$build_dir/aws-content-analysis-elasticsearch.yaml" "$global_dist_dir/aws-content-analysis-elasticsearch.template"
+cp "$build_dir/aws-content-analysis-opensearch.yaml" "$global_dist_dir/aws-content-analysis-opensearch.template"
 cp "$build_dir/aws-content-analysis-auth.yaml" "$global_dist_dir/aws-content-analysis-auth.template"
 cp "$build_dir/aws-content-analysis-web.yaml" "$global_dist_dir/aws-content-analysis-web.template"
 cp "$build_dir/aws-content-analysis-video-workflow.yaml" "$global_dist_dir/aws-content-analysis-video-workflow.template"
@@ -224,9 +224,9 @@ sed -i.orig -e "$new_version" "$global_dist_dir/aws-content-analysis-use-existin
 sed -i.orig -e "$new_global_bucket" "$global_dist_dir/aws-content-analysis.template"
 sed -i.orig -e "$new_regional_bucket" "$global_dist_dir/aws-content-analysis.template"
 sed -i.orig -e "$new_version" "$global_dist_dir/aws-content-analysis.template"
-sed -i.orig -e "$new_global_bucket" "$global_dist_dir/aws-content-analysis-elasticsearch.template"
-sed -i.orig -e "$new_regional_bucket" "$global_dist_dir/aws-content-analysis-elasticsearch.template"
-sed -i.orig -e "$new_version" "$global_dist_dir/aws-content-analysis-elasticsearch.template"
+sed -i.orig -e "$new_global_bucket" "$global_dist_dir/aws-content-analysis-opensearch.template"
+sed -i.orig -e "$new_regional_bucket" "$global_dist_dir/aws-content-analysis-opensearch.template"
+sed -i.orig -e "$new_version" "$global_dist_dir/aws-content-analysis-opensearch.template"
 sed -i.orig -e "$new_global_bucket" "$global_dist_dir/aws-content-analysis-auth.template"
 sed -i.orig -e "$new_regional_bucket" "$global_dist_dir/aws-content-analysis-auth.template"
 sed -i.orig -e "$new_version" "$global_dist_dir/aws-content-analysis-auth.template"
@@ -235,10 +235,10 @@ sed -i.orig -e "$new_regional_bucket" "$global_dist_dir/aws-content-analysis-web
 sed -i.orig -e "$new_version" "$global_dist_dir/aws-content-analysis-web.template"
 
 echo "------------------------------------------------------------------------------"
-echo "Elasticsearch consumer Function"
+echo "Opensearch consumer Function"
 echo "------------------------------------------------------------------------------"
 
-echo "Building Elasticsearch Consumer function"
+echo "Building Opensearch Consumer function"
 cd "$source_dir/consumer" || exit 1
 
 [ -e dist ] && rm -r dist
