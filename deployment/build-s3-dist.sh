@@ -78,6 +78,7 @@ parse_params() {
   # default values of variables set from params
   flag=0
   param=''
+  profile=default
 
   while :; do
     case "${1-}" in
@@ -346,21 +347,22 @@ if [ "$global_bucket" != "solutions-reference" ] && [ "$global_bucket" != "solut
   echo "------------------------------------------------------------------------------"
   echo "Copy dist to S3"
   echo "------------------------------------------------------------------------------"
-  echo "Validating ownership of distribution buckets before copying deployment assets to them..."
+  echo "Validating ownership of s3://$global_bucket"
   # Get account id
-  account_id=$(aws sts get-caller-identity --query Account --output text)
+  account_id=$(aws sts get-caller-identity --query Account --output text --profile $profile)
   if [ $? -ne 0 ]; then
     msg "ERROR: Failed to get AWS account ID"
     die 1
   fi
-  # Validate ownership of $global_dist_dir
-  aws s3api head-bucket --bucket $global_bucket --expected-bucket-owner $account_id
+  # Validate ownership of $global_bucket
+  aws s3api head-bucket --bucket $global_bucket --expected-bucket-owner $account_id --profile $profile
   if [ $? -ne 0 ]; then
     msg "ERROR: Your AWS account does not own s3://$global_bucket/"
     die 1
   fi
+  echo "Validating ownership of s3://${regional_bucket}-${region}"
   # Validate ownership of ${regional_bucket}-${region}
-  aws s3api head-bucket --bucket ${regional_bucket}-${region} --expected-bucket-owner $account_id
+  aws s3api head-bucket --bucket ${regional_bucket}-${region} --expected-bucket-owner $account_id --profile $profile
   if [ $? -ne 0 ]; then
     msg "ERROR: Your AWS account does not own s3://${regional_bucket}-${region} "
     die 1
@@ -373,7 +375,7 @@ if [ "$global_bucket" != "solutions-reference" ] && [ "$global_bucket" != "solut
   echo "**********                    I M P O R T A N T                      **********"
   echo "*******************************************************************************"
   echo "** You are about to upload templates and code to S3. Please confirm that     **"
-  echo "** buckets ${bucket}-reference and ${bucket}-${region} are appropriately     **"
+  echo "** buckets ${global_bucket} and ${regional_bucket}-${region} are appropriately     **"
   echo "** secured (not world-writeable, public access blocked) before continuing.   **"
   echo "*******************************************************************************"
   echo "*******************************************************************************"
