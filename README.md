@@ -23,9 +23,9 @@ For more installation options, see the [Advanced Installation](#advanced-install
 
 # COST
 
-You are responsible for the cost of the AWS services used while running this application. The primary cost factors come from using Amazon Rekognition and the Elasticsearch engine provided by the Amazon OpenSearch Service (successor to Amazon Elasticsearch Service). Videos cost about $0.50 per minute to process, but can vary between $0.10 per minute and $0.60 per minute depending on the video content. If you disable Amazon Rekognition in your workflow configuration, then video costs can decrease to approximately $0.04 per minute. Data storage and the Amazon OpenSearch Service will cost approximately ***$10.00 per day*** regardless of the quantity or type of video content.
+You are responsible for the cost of the AWS services used while running this application. The primary cost factors come from using Amazon Rekognition and the Amazon OpenSearch Service (successor to Amazon Elasticsearch Service). Video processing incurs a one-time cost of about $0.50 per minute of video duration, but this can vary between $0.10 per minute and $0.60 per minute depending on the video content. The recurring costs for data storage, search, and other services amount to about ***$3 per day***.
 
-After a video is uploaded into the solution, the costs for processing are a one-time expense. However, data storage costs occur daily, as shown in the following screenshot from AWS Cost Explorer.
+The breakdown of recurring and one-time processing costs can be seen in the AWS Cost Explorer, as shown below:
 
 <img src="docs/images/cost.png" width=600>
 
