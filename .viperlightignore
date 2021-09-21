@@ -4,6 +4,8 @@ source/consumer/lambda_handler.py:729
 deployment/aws-content-analysis-auth.yaml:177
 CODE_OF_CONDUCT.md:4
 CONTRIBUTING.md:50
-README.md:175
+README.md:180
+README.md:181
+README.md:205
 cloudformation/aws-content-analysis-auth.yaml:166
-source/consumers/elastic/lambda_handler.py:547
+source/consumer/lambda_handler.py:732
