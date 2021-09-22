@@ -117,7 +117,7 @@
                     v-if="noAssets"
                   >
                     <p>
-                      Looks like no assets have been uploaded! Try uploading <a href="upload">here</a>.
+                      Looks like no assets have been uploaded! Try uploading <a href="upload" rel="noopener noreferrer">here</a>.
                     </p>
                   </div>
                   <div
@@ -227,7 +227,7 @@
     },
     methods: {
       openWindow: function (url) {
-        window.open(url);
+        window.open(url, "_blank", "noopener,noreferer");
       },
       async deleteAsset(assetId) {
         let apiName = 'mieDataplaneApi'
