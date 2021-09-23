@@ -78,7 +78,6 @@ parse_params() {
   # default values of variables set from params
   flag=0
   param=''
-  profile=default
 
   while :; do
     case "${1-}" in
