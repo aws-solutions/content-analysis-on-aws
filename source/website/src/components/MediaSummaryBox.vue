@@ -14,7 +14,7 @@
         <br>
         <label>Filename:&nbsp;</label>
         <a
-          :href="videoUrl"
+          :href="videoUrl" rel="noopener noreferrer"
           download
         >
           {{ filename }}

@@ -78,7 +78,7 @@ export default {
   },
   methods: {
     openWindow: function (url) {
-      window.open(url);
+      window.open(url, "noopener,noreferer");
     },
     signOut() {
       this.$Amplify.Auth.signOut()
