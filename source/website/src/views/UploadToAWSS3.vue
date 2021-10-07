@@ -59,13 +59,24 @@
         title="REST API"
         ok-only
       >
+        <label>Workflow Type:</label>
+        <b-form-group>
+          <b-form-radio-group
+              id="curlable-workflows"
+              v-model="curlWorkflow"
+              name="curlable-workflows"
+          >
+          <b-form-radio  value="Video">Video</b-form-radio>
+          <b-form-radio  value="Image">Image</b-form-radio>
+          </b-form-radio-group>
+        </b-form-group>
         <label>Request URL:</label>
         <pre v-highlightjs><code class="bash">POST {{ WORKFLOW_API_ENDPOINT }}workflow/execution</code></pre>
         <label>Request data:</label>
         <pre v-highlightjs="JSON.stringify(workflowConfigWithInput)"><code class="json"></code></pre>
         <label>Sample command:</label>
-        <p>Be sure to replace "SAMPLE_VIDEO.MP4" with the S3 key of an actual file.</p>
-        <pre v-highlightjs="curlCommand"><code class="bash"></code></pre>
+        <p>Be sure to replace "{{ sample_file }}" with the S3 key of an actual file.</p>
+        <pre v-highlightjs="curlWorkflowExecution"><code class="bash"></code></pre>
       </b-modal>
       <br>
       <span v-if="upload_in_progress" class="text-secondary">Upload in progress</span>
@@ -107,7 +118,7 @@
                   <br><br>
                   You may upload json files alongside media files on this page. In that case, enter <code>public/upload/[filename.json]</code> as the S3 key for the data file.
                   <br><br>
-                  The <code>generic_data_lookup.py</code> operator loads the specified JSON data into the asset metadata table in DynamoDB. It requires that the JSON data be a dict, not a list. Don't forget to extend the Elasticsearch consumer (source/consumers/elastic/lambda_handler.py) if you want the generic data to be added to Elasticsearch so it can be searched and rendered in this front-end application.
+                  The <code>generic_data_lookup.py</code> operator loads the specified JSON data into the asset metadata table in DynamoDB. It requires that the JSON data be a dict, not a list. Don't forget to extend the OpenSearch (aka Elasticsearch) consumer (source/consumer/lambda_handler.py) if you want the generic data to be indexed so it can be searchable and rendered in this front-end application.
                 </b-modal>
 
                 <b-form-input v-if="enabledOperators.includes('faceSearch')" id="face_collection_id" v-model="faceCollectionId" placeholder="Enter face collection id"></b-form-input>
@@ -218,7 +229,7 @@
         <pre v-highlightjs><code class="bash">GET {{ WORKFLOW_API_ENDPOINT }}workflow/execution/asset/{asset_id}</code></pre>
         <label>Sample command:</label>
         <p>Be sure to replace <b>{asset_id}</b> with a valid asset ID.</p>
-        <pre v-highlightjs="curlCommand2"><code class="bash"></code></pre>
+        <pre v-highlightjs="curlExecutionHistory"><code class="bash"></code></pre>
       </b-modal>
     </b-container>
   </div>
@@ -237,8 +248,8 @@ export default {
   data() {
     return {
       restApi2: '',
-      curlCommand: '',
-      curlCommand2: '',
+      curlWorkflow: 'Video',
+      curlWorkflowTypes: ["Image", "Video"],
       showWorkflowStatusApi: false,
       showExecuteApi: false,
       showGenericOperatorHelp: false,
@@ -615,16 +626,39 @@ export default {
       workflow_config["Configuration"]["defaultTextSynthesisStage"] = defaultTextSynthesisStage
       return workflow_config
     },
+    curlWorkflowExecution() {
+      // get curl command to request workflow execution
+      return 'awsscurl -X POST --region '+ this.AWS_REGION +' -H "Content-Type: application/json" --data \''+JSON.stringify(this.workflowConfigWithInput)+'\' '+this.WORKFLOW_API_ENDPOINT+'workflow/execution'
+    },
+    sample_file() {
+      if (this.curlWorkflow === "Video") {
+        return "SAMPLE_VIDEO.MP4"
+      }
+      else if (this.curlWorkflow === "Image") {
+        return "SAMPLE_IMAGE.PNG"
+      }
+    },
+    curlExecutionHistory() {
+      // get curl command to request execution history
+      return 'awscurl -X GET --region '+ this.AWS_REGION +' -H "Content-Type: application/json" '+this.WORKFLOW_API_ENDPOINT+'workflow/execution/asset/{asset_id}'
+    },
     workflowConfigWithInput() {
       // This function is just used to pretty print the rest api
       // for workflow execution in a popup modal
-      let data = JSON.parse(JSON.stringify(this.workflow_config));
-      data["Name"] = "CasVideoWorkflow"
+      let data = {}
+      if (this.curlWorkflow === "Video") {
+        data = JSON.parse(JSON.stringify(this.videoWorkflowConfig));
+        data["Name"] = "CasVideoWorkflow"
+      }
+      else if (this.curlWorkflow === "Image") {
+        data = JSON.parse(JSON.stringify(this.imageWorkflowConfig));
+        data["Name"] = "CasImageWorkflow"
+      }
       data["Input"] = {
         "Media": {
           "Video": {
             "S3Bucket": this.DATAPLANE_BUCKET,
-            "S3Key": "SAMPLE_VIDEO.MP4"
+            "S3Key": this.sample_file
           }
         }
       }
@@ -638,7 +672,6 @@ export default {
     }
   },
   mounted: function() {
-    this.getCurlCommand();
     this.executed_assets = this.execution_history;
     this.pollWorkflowStatus();
   },
@@ -646,12 +679,6 @@ export default {
     clearInterval(this.workflow_status_polling)
   },
   methods: {
-    getCurlCommand() {
-      // get curl command to request workflow execution
-      this.curlCommand = 'awscurl -X POST --region '+ this.AWS_REGION +' -H "Content-Type: application/json" --data \''+JSON.stringify(this.workflowConfigWithInput)+'\' '+this.WORKFLOW_API_ENDPOINT+'workflow/execution'
-      // get curl command to request execution history
-      this.curlCommand2 = 'awscurl -X GET --region '+ this.AWS_REGION +' -H "Content-Type: application/json" '+this.WORKFLOW_API_ENDPOINT+'workflow/execution/asset/{asset_id}'
-    },
     selectAll: function() {
       this.enabledOperators = [
         "labelDetection",
