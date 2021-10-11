@@ -59,7 +59,7 @@ Users can enable or disable operators in the upload view shown below:
 
 # Search Capabilities:
 
-The search field in the Collection view searches the full media content database in Elasticsearch. Everything you see in the analysis page is searchable. Even data that is excluded by the threshold you set in the Confidence slider is searchable. Search queries must use valid Lucene syntax.
+The search field in the Collection view searches the full media content database in OpenSearch. Everything you see in the analysis page is searchable. Even data that is excluded by the threshold you set in the Confidence slider is searchable. Search queries must use valid Lucene syntax.
 
 Here are some sample searches:
 
@@ -185,37 +185,46 @@ Workflows can be started automatically when files are copied to a designated S3 
 ## Adding new operators and extending data stream consumers:
 ***(Difficulty: 60 minutes)***
 
-The GUI for this demo application loads media analysis data from Elasticsearch. If you create a new analysis operator (see the MIE [Implementation Guide](https://github.com/awslabs/aws-media-insights-engine/blob/master/IMPLEMENTATION_GUIDE.md#4-implementing-a-new-operator-in-mie)) and you want to surface data from that new operator in this demo application, then edit `source/consumers/elastic/lambda_handler.py` and add your operator name to the list of `supported_operators`. Define a processing method to create Elasticsearch records from metadata JSON objects. This method should concatenate pages, flatten JSON arrays, add the operator name, add the workflow name, and add any other fields that can be useful for analytics. Call this processing method alongside the other processing methods referenced in the `lambda_handler()` entrypoint.
+The GUI for this demo application loads media analysis data from OpenSearch. If you create a new analysis operator (see the MIE [Implementation Guide](https://github.com/awslabs/aws-media-insights-engine/blob/master/IMPLEMENTATION_GUIDE.md#4-implementing-a-new-operator-in-mie)) and you want to surface data from that new operator in this demo application, then edit `source/consumers/elastic/lambda_handler.py` and add your operator name to the list of `supported_operators`. Define a processing method to create OpenSearch records from metadata JSON objects. This method should concatenate pages, flatten JSON arrays, add the operator name, add the workflow name, and add any other fields that can be useful for analytics. Call this processing method alongside the other processing methods referenced in the `lambda_handler()` entrypoint.
 
-Finally, you will need to write front-end code to retrieve your new operator's data from Elasticsearch and render it in the GUI.
+Finally, you will need to write front-end code to retrieve your new operator's data from OpenSearch and render it in the GUI.
 
-When you trigger workflows with your new operator, you should be able to validate how that operator's data is being processed from the Elasticsearch consumer log. To find this log, search Lambda functions for "ElasticsearchConsumer".
+When you trigger workflows with your new operator, you should be able to validate how that operator's data is being processed from the OpenSearch consumer log. To find this log, search Lambda functions for "OpensearchConsumer".
 
-### Validate metadata in Elasticsearch
+### Validate metadata in OpenSearch
 
-Validating data in Elasticsearch is easiest via the Kibana GUI. However, access to Kibana is disabled by default. To enable it, open your Elasticsearch Service domain in the AWS Console and click the "Modify access policy" under the Actions menu and add a policy that allows connections from your local IP address, such as:
+Validating data in OpenSearch is easiest via the Kibana GUI. However, access to Kibana is disabled by default. To enable it, open your Amazon OpenSearch Service domain in the AWS Console and click the "Edit security configuration" under the Actions menu, then add a policy that allows connections from your local IP address, as indicated by https://checkip.amazonaws.com/, such as:
 
 ```
 {
-  "Effect": "Allow",
-  "Principal": {
-    "AWS": "*"
-  },
-  "Action": "es:*",
-  "Resource": "arn:aws:es:us-west-2:123456789012:domain/mie-es/*",
-  "Condition": {
-    "IpAddress": {
-      "aws:SourceIp": "52.108.112.178/32"
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": [
+          "*"
+        ]
+      },
+      "Action": [
+        "es:*"
+      ],
+      "Resource": "arn:aws:es:us-west-2:123456789012:domain/opensearchservi-abcde0fghijk/*",
+      "Condition": {
+        "IpAddress": {
+          "aws:SourceIp": "(output from https://checkip.amazonaws.com/)/32"
+        }
+      }
     }
-  }
+  ]
 }
 ```
 
-Click Submit to save the new policy. After your domain is finished updating, click on the link to open Kibana. Now click on the **Discover** link from the left-hand side menu. This should take you to a page for creating an index pattern if you haven't created one already. Create an `mie*` index pattern in the **Index pattern** textbox. This will include all the indices that were created in the MIE stack.
+Click Submit to save the new policy. After your domain is finished updating, click on the link to open Kibana. Now click on the **Discover** link from the left-hand side menu. This should take you to a page for creating an index pattern if you haven't created one already. Create an `mie*` index pattern in the **Index pattern** textbox. This will include all the indices that were created by the Content Analysis solution.
 
 <img src="docs/images/kibana-create-index.png" width=600>
 
-Now you can use Kibana to validate that your operator's data is present in Elasticsearch. You can validate this by running a workflow where your operator is the only enabled operator, then searching for the asset_id produced by that workflow in Kibana.
+Now, you can use Kibana to validate that your operator's data is present in OpenSearch, and thereby able to be surfaced in the user interface. You can validate data from new operators by running a workflow where said operator is the only enabled operator, then searching for the asset_id produced by that workflow in Kibana.
 
 
 # User Authentication
