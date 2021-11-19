@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [tbd] - tbd
 
 - New feature: Mitigate the risk of reverse tabnabbing in href links (#43)
+- Bug fix: Confidence value has no impact on search queries (#54)
 
 ## [2.0.0] - 2021-08-31
 
