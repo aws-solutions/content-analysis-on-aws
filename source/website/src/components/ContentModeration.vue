@@ -86,7 +86,7 @@
         ok-only
     >
       <label>Request URL:</label>
-      <pre v-highlightjs><code class="bash">GET {{ ELASTICSEARCH_ENDPOINT }}workflow/execution</code></pre>
+      <pre v-highlightjs><code class="bash">GET {{ SEARCH_ENDPOINT }}workflow/execution</code></pre>
       <label>Search query:</label>
       <pre v-highlightjs="JSON.stringify(searchQuery)"><code class="json"></code></pre>
       <label>Sample command:</label>
@@ -175,7 +175,7 @@
       getCurlCommand() {
         this.searchQuery = 'AssetId:'+this.$route.params.asset_id+' Confidence:>'+this.Confidence+' Operator:'+this.operator;
         // get curl command to search elasticsearch
-        this.curlCommand = 'awscurl -X GET --profile default --service es --region ' + this.AWS_REGION + ' \'' + this.ELASTICSEARCH_ENDPOINT + '/_search?q=' + encodeURIComponent(this.searchQuery) + '\''
+        this.curlCommand = 'awscurl -X GET --profile default --service es --region ' + this.AWS_REGION + ' \'' + this.SEARCH_ENDPOINT + '/_search?q=' + encodeURIComponent(this.searchQuery) + '\''
       },
       countLabels(unique_count, total_count) {
         this.count_distinct_labels = unique_count;
@@ -200,7 +200,8 @@
           // redraw markers on video timeline
           this.player.markers.removeAll();
         }
-        this.fetchAssetData()
+        this.getCurlCommand();
+        this.fetchAssetData();
       },
       // updateMarkers updates markers in the video player and is called when someone clicks on a label button
       updateMarkers (label) {
@@ -225,7 +226,6 @@
         }
       },
       async fetchAssetData () {
-          let query = 'AssetId:'+this.$route.params.asset_id+' Confidence:>'+this.Confidence+' Operator:'+this.operator;
           let apiName = 'contentAnalysisElasticsearch';
           let path = '/_search';
           let apiParams = {
