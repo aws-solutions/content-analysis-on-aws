@@ -13,11 +13,6 @@
       </p>
     </div>
     <div v-else>
-      <div v-if="isProfane">
-        <span style="color:red">WARNING: Transcript contains potentially offensive words.</span>
-        <br>
-        <br>
-      </div>
       {{ transcript }}
     </div>
   </div>
@@ -33,13 +28,6 @@ export default {
       operator: "transcript",
       noTranscript: false
     }
-  },
-  computed: {
-    isProfane() {
-      const Filter = require('bad-words');
-      const profanityFilter = new Filter({ placeHolder: '_' });
-      return profanityFilter.isProfane(this.transcript);
-    },
   },
   deactivated: function () {
     this.transcript = ""
