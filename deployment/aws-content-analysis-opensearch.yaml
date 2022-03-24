@@ -25,6 +25,9 @@ Parameters:
   AnalyticsStreamArn:
     Description: "Arn of the MIE kinesis data stream"
     Type: String
+  MieKMSKeyArn:
+    Type: String
+    Description: "ARN of the MIE KMS Key"
 
 Mappings:
   SourceCode:
@@ -162,6 +165,11 @@ Resources:
                   - "s3:GetObject"
                   - "s3:PutObject"
                 Resource: !Sub "arn:aws:s3:::${MieDataplaneBucket}/*"
+              - Effect: Allow
+                Action:
+                  - "kms:GenerateDataKey"
+                  - "kms:Decrypt"
+                Resource: !Ref MieKMSKeyArn
 Outputs:
   DomainEndpoint:
     Value: !GetAtt OpensearchServiceDomain.DomainEndpoint

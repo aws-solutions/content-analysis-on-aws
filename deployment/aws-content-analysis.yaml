@@ -81,6 +81,7 @@ Resources:
         AnalyticsStreamArn: !GetAtt MieStack.Outputs.AnalyticsStreamArn
         MieDataplaneBucket: !GetAtt MieStack.Outputs.DataplaneBucket
         NodeType: !Ref OpensearchNodeSize
+        MieKMSKeyArn: !GetAtt MieStack.Outputs.MieKMSArn
 
   # Deploy Auth stack
 
@@ -107,6 +108,7 @@ Resources:
         SearchDomainArn: !GetAtt OpensearchStack.Outputs.DomainArn
         DataplaneBucket: !GetAtt MieStack.Outputs.DataplaneBucket
         ParentStackName: !Ref MieStack
+        MieKMSKeyArn: !GetAtt MieStack.Outputs.MieKMSArn
 
   WebStack:
     Type: "AWS::CloudFormation::Stack"
