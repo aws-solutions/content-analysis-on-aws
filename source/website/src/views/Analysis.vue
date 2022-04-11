@@ -333,7 +333,8 @@
           const proxy_encode_key = 'private/assets/' + this.$route.params.asset_id + '/' + proxy_encode_filename
           key = proxy_encode_key
         }
-        const data = { "S3Bucket": bucket, "S3Key": key };
+        // The proxy file must always be taken by the data plane bucket, even if an external bucket is defined
+        const data = { "S3Bucket": this.DATAPLANE_BUCKET, "S3Key": key };
 
         // get presigned URL to video file in S3
         let apiName = 'mieDataplaneApi'
