@@ -17,7 +17,7 @@ config = config.Config(**boto_config)
 s3 = boto3.client('s3', config=config)
 
 # These names are the lowercase version of OPERATOR_NAME defined in /source/operators/operator-library.yaml
-supported_operators = ["textdetection", "mediainfo", "transcribeaudio", "transcribevideo", "translate", "genericdatalookup", "labeldetection", "celebrityrecognition", "facesearch", "contentmoderation", "facedetection", "key_phrases", "entities", "shotdetection", "technicalcuedetection"]
+supported_operators = ["textdetection", "mediainfo", "mediainfoimage", "transcribeaudio", "transcribevideo", "translate", "genericdatalookup", "labeldetection", "celebrityrecognition", "facesearch", "contentmoderation", "facedetection", "key_phrases", "entities", "shotdetection", "technicalcuedetection"]
 
 
 def normalize_confidence(confidence_value):
@@ -911,7 +911,7 @@ def lambda_handler(event, context):
                             process_transcribe(asset_id, workflow, metadata["Results"], "audio")
                         if operator == "translate":
                             process_translate(asset_id, workflow, metadata["Results"])
-                        if operator == "mediainfo":
+                        if operator == "mediainfo" or operator == "mediainfoimage":
                             process_mediainfo(asset_id, workflow, metadata["Results"])
                         if operator == "genericdatalookup":
                             process_generic_data(asset_id, workflow, metadata["Results"])
