@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "(SO0042) - aws-content-analysis. AWS CloudFormation template that provisions the web application for the AWS Content Analysis solution."
+Description: "(SO0042) - aws-content-analysis. AWS CloudFormation template that provisions the web application for the Content Analysis on AWS solution."
 
 Parameters:
   DataplaneEndpoint:

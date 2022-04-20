@@ -1,9 +1,9 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "(SO0042) - aws-content-analysis %%VERSION%%. This is the base AWS CloudFormation template that provisions resources for the AWS Content Analysis solution."
+Description: "(SO0042) - aws-content-analysis %%VERSION%%. This is the base AWS CloudFormation template that provisions resources for the Content Analysis on AWS solution."
 
 Parameters:
   AdminEmail:
-    Description: "Email address of the AWS Content Analysis administrator"
+    Description: "Email address of the Content Analysis administrator"
     Type: String
   OpensearchNodeSize:
     Description: "The node type to be provisioned for the Opensearch cluster"

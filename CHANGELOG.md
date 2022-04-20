@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - New feature: Mitigate the risk of reverse tabnabbing in href links (#43)
 - Bug fix: Confidence value has no impact on search queries (#54)
+- Documentation: Rename project to Content Analysis on AWS
 
 ## [2.0.0] - 2021-08-31
 

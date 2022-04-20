@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # PURPOSE:
-#   Build cloud formation templates for the AWS Content Analysis solution
+#   Build cloud formation templates for the Content Analysis on AWS solution
 #
 # USAGE:
 #  ./build-s3-dist.sh [-h] [-v] --template-bucket {TEMPLATE_BUCKET} --code-bucket {CODE_BUCKET} --version {VERSION} --region {REGION} --profile {PROFILE}

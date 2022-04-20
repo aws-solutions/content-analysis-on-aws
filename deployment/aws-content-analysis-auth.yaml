@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "(SO0042) - aws-content-analysis. Deploys the AWS Content Analysis Application Cognito Infrastructure"
+Description: "(SO0042) - aws-content-analysis. Deploys Amazon Cognito resources for the Content Analysis on AWS solution"
 
 Parameters:
   AdminEmail:
@@ -37,7 +37,7 @@ Resources:
             "#/stacks/stackinfo?stackId=",
             Ref: ParentStackName
           ]]
-          EmailSubject: "Welcome to AWS Content Analysis"
+          EmailSubject: "Welcome to Content Analysis on AWS"
       EmailConfiguration:
         EmailSendingAccount: 'COGNITO_DEFAULT'
       AutoVerifiedAttributes: ['email']
@@ -206,7 +206,7 @@ Resources:
   ContentAnalysisAdminGroup:
     Type: AWS::Cognito::UserPoolGroup
     Properties:
-      Description: 'User group for AWS Content Analysis Admins'
+      Description: 'Admin user group for Content Analysis on AWS'
       RoleArn: !GetAtt ContentAnalysisAdminRole.Arn
       UserPoolId: !Ref ContentAnalysisUserPool
       GroupName: !Sub "${AWS::StackName}-Admins"

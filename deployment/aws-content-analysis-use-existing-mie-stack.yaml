@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "(SO0042) - aws-content-analysis. This is the base AWS CloudFormation template that provisions resources for the AWS Content Analysis solution over an existing Media Insights Engine stack."
+Description: "(SO0042) - aws-content-analysis. This is the base AWS CloudFormation template that provisions resources for the Content Analysis on AWS solution over an existing Media Insights Engine stack."
 
 Parameters:
   MieStackName:

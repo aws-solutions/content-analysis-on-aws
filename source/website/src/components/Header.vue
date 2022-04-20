@@ -6,7 +6,7 @@
       variant="dark"
     >
       <b-navbar-brand to="/">
-        AWS Content Analysis
+        Content Analysis on AWS
       </b-navbar-brand>
       <b-navbar-toggle target="nav-collapse" />
 
