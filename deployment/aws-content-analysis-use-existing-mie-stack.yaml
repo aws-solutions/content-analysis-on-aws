@@ -54,6 +54,9 @@ Resources:
           Fn::ImportValue:
             !Sub "${MieStackName}:DataplaneBucket"
         NodeType: !Ref OpensearchNodeSize
+        MieKMSKeyArn:
+          Fn::ImportValue:
+            !Sub "${MieStackName}:MieKMSArn"
 
   # Deploy Auth stack
 
@@ -86,6 +89,9 @@ Resources:
           Fn::ImportValue:
             !Sub "${MieStackName}:DataplaneBucket"
         ParentStackName: !Ref AWS::StackId
+        MieKMSKeyArn:
+          Fn::ImportValue:
+            !Sub "${MieStackName}:MieKMSArn"
 
   # Deploy Video Workflow
   CompleteVideoWorkflow:

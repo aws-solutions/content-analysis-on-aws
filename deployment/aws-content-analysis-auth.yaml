@@ -20,6 +20,9 @@ Parameters:
   ParentStackName:
     Description: Name of the parent Cloud Formation stack
     Type: String
+  MieKMSKeyArn:
+    Description: ARN of MIE KMS Key
+    Type: String
 
 Resources:
   ContentAnalysisUserPool:
@@ -274,6 +277,15 @@ Resources:
                     ],
                     "Effect": "Allow",
                     "Resource": "${searchdomain}/*"
+                  },
+                  {
+                  "Action": [
+                      "kms:Encrypt",
+                      "kms:GenerateDataKey",
+                      "kms:Decrypt",
+                    ],
+                    "Effect": "Allow",
+                    "Resource": "${kmskeyarn}"
                   }
                 ]
               }
@@ -283,7 +295,8 @@ Resources:
               wfapi: !Ref WorkflowApiId,
               dataapi: !Ref DataplaneApiId,
               searchdomain: !Ref SearchDomainArn,
-              dataplanebucket: !Ref DataplaneBucket
+              dataplanebucket: !Ref DataplaneBucket,
+              kmskeyarn: !Ref MieKMSKeyArn
             }
 
   AddAdminUserToAdminGroup:
