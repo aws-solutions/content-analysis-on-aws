@@ -281,7 +281,8 @@ Resources:
                   {
                   "Action": [
                       "kms:Encrypt",
-                      "kms:GenerateDataKey"
+                      "kms:GenerateDataKey",
+                      "kms:Decrypt",
                     ],
                     "Effect": "Allow",
                     "Resource": "${kmskeyarn}"
