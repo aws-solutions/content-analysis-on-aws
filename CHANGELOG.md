@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New feature: Mitigate the risk of reverse tabnabbing in href links (#43)
 - Bug fix: Confidence value has no impact on search queries (#54)
 
+## [2.0.1] - 08/18/2022
+
+### Fixed:
+
+* Version bumped python runtime for web helper lambda function which was preventing successful deployment
+
 ## [2.0.0] - 2021-08-31
 
 - New feature: Allow users to control playback speed in the video player.
