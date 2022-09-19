@@ -19,7 +19,7 @@ Parameters:
       - "r4.xlarge.search"
 
 Conditions:
-  EnableAnonymousData: !Equals [ !FindInMap [AnonymousData,SendAnonymousData,Data], Yes]
+  EnableAnonymousData: !Equals [ !FindInMap [AnonymousData,SendAnonymousData,Data], true]
 
 Mappings:
   MediaInsightsEngine:
@@ -34,7 +34,7 @@ Mappings:
       Version: "%%VERSION%%"
   AnonymousData:
     SendAnonymousData:
-      Data: Yes
+      Data: true
 
 Resources:
   # Deploy MIE Framework
@@ -51,10 +51,10 @@ Resources:
             - Version
           - "/media-insights-stack.template"
       Parameters:
-        DeployAnalyticsPipeline: Yes
-        DeployTestResources: No
+        DeployAnalyticsPipeline: true
+        DeployTestResources: false
         MaxConcurrentWorkflows: 5
-        EnableXrayTrace: Yes
+        EnableXrayTrace: true
         SendAnonymousData: !FindInMap [AnonymousData,SendAnonymousData,Data]
         SolutionId: SO0042
         SolutionVersion: "%%VERSION%%"
