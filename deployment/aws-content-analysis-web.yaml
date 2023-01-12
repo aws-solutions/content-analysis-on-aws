@@ -290,7 +290,7 @@ Resources:
       Handler: website_helper.lambda_handler
       MemorySize: 256
       Role: !GetAtt WebsiteHelperRole.Arn
-      Runtime: python3.6
+      Runtime: python3.9
       Timeout: 900
       Environment:
         Variables:
