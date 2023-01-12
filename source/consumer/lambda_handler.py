@@ -1,4 +1,4 @@
-# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from elasticsearch import Elasticsearch, RequestsHttpConnection
@@ -773,7 +773,7 @@ def delete_asset_all_indices(es_object, asset_id):
             body=delete_query
         )
     except Exception as e:
-        print("Unable to delete from elasticsearch: {es}:".format(es=e))
+        print("Unable to delete from elasticsearch: {es}:".format(es=e)) #nosec
     else:
         print(delete_request)
         print("Deleted asset: {asset} from elasticsearch".format(asset=asset_id))

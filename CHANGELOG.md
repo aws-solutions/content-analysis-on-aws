@@ -4,12 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [tbd] - tbd
 
-- New feature: Mitigate the risk of reverse tabnabbing in href links (#43)
-- Bug fix: Confidence value has no impact on search queries (#54)
+## [2.0.2] - 2023-01-11
 
-## [2.0.1] - 08/18/2022
+### Fixed:
+
+* Updated python packages
+* Replaced deprecated python command with python3
+
+## [2.0.1] - 2022-08-18
 
 ### Fixed:
 

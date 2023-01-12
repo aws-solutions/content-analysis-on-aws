@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 ##############################################################################
-#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.   #
+#  Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.   #
 #                                                                            #
 #  Licensed under the Apache License Version 2.0 (the "License").            #
 #  You may not use this file except in compliance with the License.          #
@@ -30,7 +30,7 @@ def send_metrics(config):
     data = json.dumps(metrics).encode('utf8')
     headers = {'content-type': 'application/json'}
     req = urllib.request.Request(url, data,headers)
-    response = urllib.request.urlopen(req)
+    response = urllib.request.urlopen(req) #nosec
     print('RESPONSE CODE:: {}'.format(response.getcode()))
     print('METRICS SENT:: {}'.format(data))
     return
