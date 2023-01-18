@@ -10,8 +10,8 @@ The following Cloudformation templates will deploy the Content Analysis front-en
 
 Region| Launch
 ------|-----
-US East (N. Virginia) | [![Launch in us-east-1](docs/images/launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?stackName=cas&templateURL=https://rodeolabz-us-east-1.s3.us-east-1.amazonaws.com/aws-content-analysis/v2.0.0/aws-content-analysis.template)
-US West (Oregon) | [![Launch in us-west-2](docs/images/launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/new?stackName=cas&templateURL=https://rodeolabz-us-west-2.s3.us-west-2.amazonaws.com/aws-content-analysis/v2.0.0/aws-content-analysis.template)
+US East (N. Virginia) | [![Launch in us-east-1](docs/images/launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?stackName=cas&templateURL=https://rodeolabz-us-east-1.s3.us-east-1.amazonaws.com/aws-content-analysis/latest/aws-content-analysis.template)
+US West (Oregon) | [![Launch in us-west-2](docs/images/launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/new?stackName=cas&templateURL=https://rodeolabz-us-west-2.s3.us-west-2.amazonaws.com/aws-content-analysis/latest/aws-content-analysis.template)
 
 Once the Cloud Formation stack has been created, open the URL shown in the `ContentAnalyisSolution` output of the base stack. You can also get this URL with the following AWS CLI command:
 
