@@ -259,7 +259,7 @@ Resources:
                   - es:ESHttpGet
                 Effect: Allow
                 Resource:
-                  - !Ref SearchDomainArn
+                  - !Sub '${SearchDomainArn}/*'
               - Sid: 'ContentAnalysisKMS'
                 Action:
                   - kms:Encrypt
