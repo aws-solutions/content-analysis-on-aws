@@ -92,6 +92,9 @@ Resources:
     DeletionPolicy: Retain
     Properties:
       AccessControl: LogDeliveryWrite
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: ObjectWriter
       BucketName: !GetAtt GetWebsiteBucketName.Data
       BucketEncryption:
         ServerSideEncryptionConfiguration:
