@@ -34,14 +34,12 @@ jobs:
         run: |
           echo "SHORT_SHA=`git rev-parse --short HEAD`" >> $GITHUB_ENV
           DATETIME=$(date '+%s')
-          echo "DIST_OUTPUT_BUCKET=aws-content-analysis-$DATETIME-dist" >> $GITHUB_ENV
-          echo "TEMPLATE_OUTPUT_BUCKET=aws-content-analysis-$DATETIME" >> $GITHUB_ENV
+          echo "DIST_OUTPUT_BUCKET=solutions-reference" >> $GITHUB_ENV
+          echo "TEMPLATE_OUTPUT_BUCKET=solutions-reference" >> $GITHUB_ENV
 
       - name: Run build script
         run: |
           cd deployment
-          aws s3 mb s3://$DIST_OUTPUT_BUCKET-$REGION --region $REGION
-          aws s3 mb s3://$TEMPLATE_OUTPUT_BUCKET --region $REGION
           echo y | ./build-s3-dist.sh --template-bucket ${TEMPLATE_OUTPUT_BUCKET} --code-bucket ${DIST_OUTPUT_BUCKET} --version ${VERSION} --region ${REGION} | tee >( awk '/Without existing MIE deployment/{getline; print}' >template )
 
       # - name: Deploy stack
