@@ -13,9 +13,9 @@ on:
 jobs:
   build-us-west-2:
     runs-on: ubuntu-latest
-    # env:
-    #   REGION: "us-west-2"
-    #   VERSION: "3.0.0"
+    env:
+      REGION: "us-west-2"
+      VERSION: "3.0.0"
     #   EMAIL: ${{ secrets.INVITATION_EMAIL_RECIPIENT }}
     steps:
       - name: Check out pr branch
