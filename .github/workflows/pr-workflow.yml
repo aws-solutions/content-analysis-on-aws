@@ -67,8 +67,8 @@ jobs:
       #     # Make the WEBAPP_URL available to the next workflow step
       #     echo "WEBAPP_URL=${WEBAPP_URL}" >> $GITHUB_ENV
 
-      - name: Clean build environment
-        run: aws s3 rb s3://${DIST_OUTPUT_BUCKET}-${REGION} --force
+      # - name: Clean build environment
+      #   run: aws s3 rb s3://${DIST_OUTPUT_BUCKET}-${REGION} --force
 
       # - name: Get login credentials
       #   run: |
