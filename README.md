@@ -81,11 +81,11 @@ EMAIL=[specify your email]
 WEBAPP_STACK_NAME=[specify a stack name]
 REGION=[specify a region]
 VERSION=1.0.0
-git clone https://github.com/awslabs/aws-content-analysis
-cd aws-content-analysis
+git clone https://github.com/aws-solutions/content-analysis-on-aws
+cd content-analysis-on-aws
 cd deployment
 DATETIME=$(date '+%s')
-DIST_OUTPUT_BUCKET=aws-content-analysis-frontend-$DATETIME
+DIST_OUTPUT_BUCKET=content-analysis-on-aws-frontend-$DATETIME
 aws s3 mb s3://$DIST_OUTPUT_BUCKET-$REGION --region $REGION
 aws s3 mb s3://$TEMPLATE_OUTPUT_BUCKET --region $REGION
 ./build-s3-dist.sh --template-bucket ${TEMPLATE_OUTPUT_BUCKET} --code-bucket ${DIST_OUTPUT_BUCKET} --version ${VERSION} --region ${REGION}

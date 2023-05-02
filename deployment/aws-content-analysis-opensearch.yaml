@@ -33,7 +33,7 @@ Mappings:
   SourceCode:
     General:
       RegionalS3Bucket: '%%REGIONAL_BUCKET_NAME%%'
-      KeyPrefix: "aws-content-analysis/%%VERSION%%"
+      KeyPrefix: "content-analysis-on-aws/%%VERSION%%"
 
 Resources:
   # Opensearch cluster

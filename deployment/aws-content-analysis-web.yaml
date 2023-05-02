@@ -21,8 +21,8 @@ Mappings:
   SourceCode:
     General:
       RegionalS3Bucket: "%%REGIONAL_BUCKET_NAME%%"
-      CodeKeyPrefix: "aws-content-analysis/%%VERSION%%"
-      WebsitePrefix: "aws-content-analysis/%%VERSION%%/website"
+      CodeKeyPrefix: "content-analysis-on-aws/%%VERSION%%"
+      WebsitePrefix: "content-analysis-on-aws/%%VERSION%%/website"
 
 Resources:
   # Web application resources
@@ -92,6 +92,9 @@ Resources:
     DeletionPolicy: Retain
     Properties:
       AccessControl: LogDeliveryWrite
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: ObjectWriter
       BucketName: !GetAtt GetWebsiteBucketName.Data
       BucketEncryption:
         ServerSideEncryptionConfiguration:

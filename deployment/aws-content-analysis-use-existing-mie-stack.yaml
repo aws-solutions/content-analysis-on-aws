@@ -25,7 +25,7 @@ Mappings:
   ContentAnalysisApp:
     SourceCode:
       GlobalS3Bucket: "%%GLOBAL_BUCKET_NAME%%"
-      TemplateKeyPrefix: "aws-content-analysis/%%VERSION%%"
+      TemplateKeyPrefix: "content-analysis-on-aws/%%VERSION%%"
 
 Resources:
 

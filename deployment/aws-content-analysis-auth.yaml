@@ -279,10 +279,10 @@ Resources:
                     "Resource": "${searchdomain}/*"
                   },
                   {
-                  "Action": [
+                    "Action": [
                       "kms:Encrypt",
                       "kms:GenerateDataKey",
-                      "kms:Decrypt",
+                      "kms:Decrypt"
                     ],
                     "Effect": "Allow",
                     "Resource": "${kmskeyarn}"

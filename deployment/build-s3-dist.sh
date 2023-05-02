@@ -291,7 +291,7 @@ echo "--------------------------------------------------------------------------
 # instead of doing a list bucket operation, which would require ListBucket permission.
 # Furthermore, the S3 bucket used to host AWS solutions (s3://solutions-reference)
 # disallows ListBucket access, so the only way to copy files from
-# s3://solutions-reference/aws-content-analysis/latest/website to
+# s3://solutions-reference/content-analysis-on-aws/latest/website to
 # ContentAnalysisWebsiteBucket is to use said manifest file.
 #
 cd $regional_dist_dir"/website/" || exit 1
@@ -342,7 +342,7 @@ cp "./dist/anonymous-data-logger.zip" "$regional_dist_dir/anonymous-data-logger.
 
 # Skip copy dist to S3 if building for solution builder because
 # that pipeline takes care of copying the dist in another script.
-if [ "$global_bucket" != "solutions-reference" ] && [ "$global_bucket" != "solutions-test-reference" ]; then
+if [[ ! "$global_bucket" =~ solutions(-[a-z]+)?-reference ]]; then
 
   echo "------------------------------------------------------------------------------"
   echo "Copy dist to S3"
@@ -394,8 +394,8 @@ if [ "$global_bucket" != "solutions-reference" ] && [ "$global_bucket" != "solut
   echo "---"
 
   set -x
-  aws s3 sync $global_dist_dir s3://$global_bucket/aws-content-analysis/$version/ $(if [ ! -z $profile ]; then echo "--profile $profile"; fi)
-  aws s3 sync $regional_dist_dir s3://${regional_bucket}-${region}/aws-content-analysis/$version/ $(if [ ! -z $profile ]; then echo "--profile $profile"; fi)
+  aws s3 sync $global_dist_dir s3://$global_bucket/content-analysis-on-aws/$version/ $(if [ ! -z $profile ]; then echo "--profile $profile"; fi)
+  aws s3 sync $regional_dist_dir s3://${regional_bucket}-${region}/content-analysis-on-aws/$version/ $(if [ ! -z $profile ]; then echo "--profile $profile"; fi)
   set +x
 
   echo "------------------------------------------------------------------------------"
@@ -406,9 +406,9 @@ if [ "$global_bucket" != "solutions-reference" ] && [ "$global_bucket" != "solut
   echo "Template to deploy:"
   echo ""
   echo "With existing MIE deployment:"
-  echo "TEMPLATE='"https://"$global_bucket"."$s3domain"/aws-content-analysis/"$version"/aws-content-analysis-use-existing-mie-stack.template"'"
+  echo "TEMPLATE='"https://"$global_bucket"."$s3domain"/content-analysis-on-aws/"$version"/aws-content-analysis-use-existing-mie-stack.template"'"
   echo "Without existing MIE deployment:"
-  echo "TEMPLATE='"https://"$global_bucket"."$s3domain"/aws-content-analysis/"$version"/aws-content-analysis.template"'"
+  echo "TEMPLATE='"https://"$global_bucket"."$s3domain"/content-analysis-on-aws/"$version"/aws-content-analysis.template"'"
 fi
 
 cleanup
