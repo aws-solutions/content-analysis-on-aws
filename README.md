@@ -10,8 +10,8 @@ The following Cloudformation templates will deploy the Content Analysis front-en
 
 Region| Launch
 ------|-----
-US East (N. Virginia) | [![Launch in us-east-1](docs/images/launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?stackName=cas&templateURL=https://s3.amazonaws.com/solutions-reference/aws-content-analysis/latest/aws-content-analysis.template)
-US West (Oregon) | [![Launch in us-west-2](docs/images/launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/new?stackName=cas&templateURL=https://s3.amazonaws.com/solutions-reference/aws-content-analysis/latest/aws-content-analysis.template)
+US East (N. Virginia) | [![Launch in us-east-1](docs/images/launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?stackName=cas&templateURL=https://s3.amazonaws.com/solutions-reference/content-analysis-on-aws/latest/aws-content-analysis.template)
+US West (Oregon) | [![Launch in us-west-2](docs/images/launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/new?stackName=cas&templateURL=https://s3.amazonaws.com/solutions-reference/content-analysis-on-aws/latest/aws-content-analysis.template)
 
 Once the Cloud Formation stack has been created, open the URL shown in the `ContentAnalyisSolution` output of the base stack. You can also get this URL with the following AWS CLI command:
 
@@ -81,11 +81,11 @@ EMAIL=[specify your email]
 WEBAPP_STACK_NAME=[specify a stack name]
 REGION=[specify a region]
 VERSION=1.0.0
-git clone https://github.com/awslabs/aws-content-analysis
-cd aws-content-analysis
+git clone https://github.com/aws-solutions/content-analysis-on-aws
+cd content-analysis-on-aws
 cd deployment
 DATETIME=$(date '+%s')
-DIST_OUTPUT_BUCKET=aws-content-analysis-frontend-$DATETIME
+DIST_OUTPUT_BUCKET=content-analysis-on-aws-frontend-$DATETIME
 aws s3 mb s3://$DIST_OUTPUT_BUCKET-$REGION --region $REGION
 aws s3 mb s3://$TEMPLATE_OUTPUT_BUCKET --region $REGION
 ./build-s3-dist.sh --template-bucket ${TEMPLATE_OUTPUT_BUCKET} --code-bucket ${DIST_OUTPUT_BUCKET} --version ${VERSION} --region ${REGION}

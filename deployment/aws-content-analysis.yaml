@@ -19,22 +19,22 @@ Parameters:
       - "r4.xlarge.search"
 
 Conditions:
-  EnableAnonymousData: !Equals [ !FindInMap [AnonymousData,SendAnonymousData,Data], Yes]
+  EnableAnonymousData: !Equals [ !FindInMap [AnonymousData,SendAnonymousData,Data], "Yes"]
 
 Mappings:
   MediaInsightsEngine:
     Release:
-      Version: "v5.0.0"
+      Version: "v5.1.2"
   Application:
     SourceCode:
       GlobalS3Bucket: "%%GLOBAL_BUCKET_NAME%%"
-      TemplateKeyPrefix: "aws-content-analysis/%%VERSION%%"
+      TemplateKeyPrefix: "content-analysis-on-aws/%%VERSION%%"
       RegionalS3Bucket: "%%REGIONAL_BUCKET_NAME%%"
-      CodeKeyPrefix: "aws-content-analysis/%%VERSION%%"
+      CodeKeyPrefix: "content-analysis-on-aws/%%VERSION%%"
       Version: "%%VERSION%%"
   AnonymousData:
     SendAnonymousData:
-      Data: Yes
+      Data: "Yes"
 
 Resources:
   # Deploy MIE Framework
@@ -44,17 +44,17 @@ Resources:
     Properties:
       TemplateURL: !Join
         - ""
-        - - "https://solutions-reference.s3.amazonaws.com/aws-media-insights-engine/"
+        - - "https://solutions-reference.s3.amazonaws.com/media-insights-on-aws/"
           - !FindInMap
             - MediaInsightsEngine
             - Release
             - Version
-          - "/media-insights-stack.template"
+          - "/media-insights-on-aws-stack.template"
       Parameters:
-        DeployAnalyticsPipeline: Yes
-        DeployTestResources: No
+        DeployAnalyticsPipeline: "Yes"
+        DeployTestResources: "No"
         MaxConcurrentWorkflows: 5
-        EnableXrayTrace: Yes
+        EnableXrayTrace: "Yes"
         SendAnonymousData: !FindInMap [AnonymousData,SendAnonymousData,Data]
         SolutionId: SO0042
         SolutionVersion: "%%VERSION%%"

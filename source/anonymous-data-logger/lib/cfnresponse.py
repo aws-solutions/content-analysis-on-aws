@@ -40,6 +40,7 @@ def send(event, context, responseStatus, responseData, physicalResourceId=None, 
 
     try:
         response = requests.put(responseUrl,
+                                timeout=20,
                                 data=json_responseBody,
                                 headers=headers)
         print("Status code: " + response.reason)
