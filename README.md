@@ -1,6 +1,6 @@
 # CONTENT ANALYSIS ON AWS
 
-**As of August 30, 2023, this AWS Solution is no longer available. Existing deployments will continue to run. If you have deployed Content Analysis on AWS via cloning GitHub open source code, you may continue to use the solution. The functionality provided by Content Analysis on AWS will be superseded with functionality in Media2Cloud on AWS and Content Localization on AWS. We encourage you to explore these solutions.**
+**As of August 30, 2023, this AWS Solution is no longer available. Existing deployments will continue to run. If you have deployed Content Analysis on AWS via cloning GitHub open source code, you may continue to use the solution. The functionality provided by Content Analysis on AWS will be superseded with functionality in [Media2Cloud on AWS](https://aws.amazon.com/solutions/implementations/media2cloud/) and [Content Localization on AWS](https://aws.amazon.com/solutions/implementations/content-localization-on-aws/). We encourage you to explore these solutions.**
 
 ---
 
