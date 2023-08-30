@@ -10,13 +10,6 @@ This application is a demo reference application for the [Media Insights Engine]
 
 # INSTALLATION
 
-The following Cloudformation templates will deploy the Content Analysis front-end application with a prebuilt Media Insights Engine back-end. **You must specify a Cloud Formation stack name that is 12 or fewer characters long**.
-
-Region| Launch
-------|-----
-US East (N. Virginia) | [![Launch in us-east-1](docs/images/launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?stackName=cas&templateURL=https://s3.amazonaws.com/solutions-reference/aws-content-analysis/latest/aws-content-analysis.template)
-US West (Oregon) | [![Launch in us-west-2](docs/images/launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/new?stackName=cas&templateURL=https://s3.amazonaws.com/solutions-reference/aws-content-analysis/latest/aws-content-analysis.template)
-
 Once the Cloud Formation stack has been created, open the URL shown in the `ContentAnalyisSolution` output of the base stack. You can also get this URL with the following AWS CLI command:
 
 ```
